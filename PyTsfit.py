@@ -368,6 +368,7 @@ class correction(object):
         '''
         Constractor.
         Mod by Zhao Bin, Feb. 17, 2019. Fix bug when reading SITE from correction file.
+        Mod by Zhao Bin, Mar.  9, 2020. Decode site name
 
         Input:
             velfile    = file name of velocity
@@ -385,6 +386,7 @@ class correction(object):
             self.correct_velo   = True
             self.veldata    = np.genfromtxt(velfile, comments='#')
             self.velsite    = np.genfromtxt(velfile, comments='#', usecols=[7], dtype='4S')
+            self.velsite    = np.array([i.decode() for i in self.velsite])
 
         if os.path.isfile(offsetfile) is False:
             print(" Input offsetfile %s do not exist!" %(offsetfile))
@@ -393,6 +395,7 @@ class correction(object):
             self.correct_offset = True
             self.offsetdata = np.genfromtxt(offsetfile, comments='#')
             self.offsetsite = np.genfromtxt(offsetfile, comments='#', usecols=[3], dtype='4S')
+            self.offsetsite = np.array([i.decode() for i in self.offsetsite])
 
         if os.path.isfile(periodfile) is False:
             print(" Input periodfile %s do not exist!" %(periodfile))
@@ -401,6 +404,7 @@ class correction(object):
             self.correct_period = True
             self.perioddata = np.genfromtxt(periodfile, comments='#')
             self.periodsite = np.genfromtxt(periodfile, comments='#', usecols=[12], dtype='4S')
+            self.periodsite = np.array([i.decode() for i in self.periodsite])
 
 
 class tsfitting:
@@ -571,20 +575,24 @@ class tsfitting:
                 if self.correct.correct_velo:
                     if self.component == 'N':
                         if len(np.where(self.correct.velsite==self.site)[0])>0:
-                            pinit[i]  = self.correct.veldata[np.where(self.correct.velsite==self.site)[0]][0,3]
+                            pinit[i]  = self.correct.veldata[self.correct.velsite==self.site][0,3]
                             lb[i]     = pinit[i]-1e-6
                             ub[i]     = pinit[i]+1e-6
+                        else:
+                            print('WARNING: No prior velocity for site {}'.format(self.site))
                     elif self.component == 'E':
                         if len(np.where(self.correct.velsite==self.site)[0])>0:
-                            pinit[i]  = self.correct.veldata[np.where(self.correct.velsite==self.site)[0]][0,2]
+                            pinit[i]  = self.correct.veldata[self.correct.velsite==self.site][0,2]
                             lb[i]     = pinit[i]-1e-6
                             ub[i]     = pinit[i]+1e-6
                     elif self.component == 'U':
                         if self.correct.veldata.shape[1] <= 8:
                             pinit[i] = 0.0
+                            lb[i]     = pinit[i]-1e-6
+                            ub[i]     = pinit[i]+1e-6
                         else:
                             if len(np.where(self.correct.velsite==self.site)[0])>0:
-                                pinit[i]  = self.correct.veldata[np.where(self.correct.velsite==self.site)[0]][0,8]
+                                pinit[i]  = self.correct.veldata[self.correct.velsite==self.site][0,8]
                     else:
                         pinit[i]  = 0.0
                 i = i+1
@@ -666,6 +674,7 @@ class tsfitting:
                     elif self.component == 'U':
                         if len(idx)==0:
                             pinit[i], pinit[i+1]  = 0.0, 0.0
+                            print('WARNING: no proior annual term for site {}'.format(self.site))
                         else:
                             pinit[i]   = self.correct.perioddata[idx][0,8]
                             pinit[i+1] = self.correct.perioddata[idx][0,9]
@@ -692,6 +701,7 @@ class tsfitting:
                     elif self.component == 'U':
                         if len(idx)==0:
                             pinit[i], pinit[i+1]  = 0.0, 0.0
+                            print('WARNING: no proior semi-annual term for site {}'.format(self.site))
                         else:
                             pinit[i]   = self.correct.perioddata[idx][0,10]
                             pinit[i+1] = self.correct.perioddata[idx][0,11]
@@ -859,6 +869,8 @@ class tsfitting:
             idx        = np.where(np.logical_or(self.flag2=='SANNUAL_SIN', self.flag2=='SANNUAL_COS'))[0] 
             param[idx] = 0.0
 
+        obs_correct = np.array([])
+        mod_correct = np.array([])
         if len(time_span) == 2:
             idx    = np.where(np.logical_and(self.t>time_span[0], self.t<time_span[1]))[0]
             if len(idx) > 0:
@@ -991,6 +1003,9 @@ def output_postseismic_disp(nrun, erun, urun, time_span, fid=None):
     idx    = np.where(np.logical_and(nt>time_span[0], nt<time_span[1]))[0]
     if len(idx) > 0:
         nobs_correct, nmod_correct = nrun.get_correct(mod_dict, time_span=time_span)
+        if len(nmod_correct) == 0:
+            print("WARNING: No correction model for {1:s}".format(nrun.site))
+            return
         ndisp = nmod_correct[-1]-nmod_correct[0]
 
     # east component
@@ -998,6 +1013,9 @@ def output_postseismic_disp(nrun, erun, urun, time_span, fid=None):
     idx    = np.where(np.logical_and(et>time_span[0], et<time_span[1]))[0]
     if len(idx) > 0:
         eobs_correct, emod_correct = erun.get_correct(mod_dict, time_span=time_span)
+        if len(emod_correct) == 0: 
+            print("WARNING: No correction model for {1:s}".format(erun.site))
+            return
         edisp = emod_correct[-1]-emod_correct[0]
 
     # vertical component
@@ -1005,6 +1023,9 @@ def output_postseismic_disp(nrun, erun, urun, time_span, fid=None):
     idx    = np.where(np.logical_and(ut>time_span[0], ut<time_span[1]))[0]
     if len(idx) > 0:
         uobs_correct, umod_correct = urun.get_correct(mod_dict, time_span=time_span)
+        if len(emod_correct) == 0: 
+            return
+            print("WARNING: No correction model for {1:s}".format(nrun.site))
         udisp = umod_correct[-1]-umod_correct[0]
 
     # print the results
@@ -1121,6 +1142,59 @@ def output_postseismic_ts(nrun, erun, urun, time_span, otype='obs'):
                 fid.write("%12.5f %10.4f %10.4f  %10.4f %10.4f  %10.4f %10.4f\n" 
                         %(t[i], nobs_correct[i]-n0, eobs_correct[i]-e0, 0.0,
                             nrun.sigma[idx][i], erun.sigma[idx][i], urun.sigma[idx][i]))
+
+
+def output_period(nrun, erun, urun, nparam, eparam, uparam):
+    '''
+    Output estimation of period term
+
+    Written by Zhao Bin, Mar.  9, 2020.
+
+    Input:
+        nrun   = an instance of class tsfitting for north component
+        erun   = an instance of class tsfitting for east  component
+        urun   = an instance of class tsfitting for up    component
+        nparam = estimated parameters for north component
+        eparam = estimated parameters for east  component
+        uparam = estimated parameters for up    component
+    '''
+
+    period = np.zeros(12)
+
+    # east component
+    idx    =  np.where(erun.flag2 == 'ANNUAL_SIN')[0]
+    if len(idx)>0:
+        period[0] = eparam[idx]
+        period[1] = eparam[idx+1]
+    idx    =  np.where(erun.flag2 == 'SANNUAL_SIN')[0]
+    if len(idx)>0:
+        period[2] = eparam[idx]
+        period[3] = eparam[idx+1]
+
+    # north component
+    idx    =  np.where(nrun.flag2 == 'ANNUAL_SIN')[0]
+    if len(idx)>0:
+        period[4] = nparam[idx]
+        period[5] = nparam[idx+1]
+    idx    =  np.where(nrun.flag2 == 'SANNUAL_SIN')[0]
+    if len(idx)>0:
+        period[6] = nparam[idx]
+        period[7] = nparam[idx+1]
+
+    # up component
+    idx    =  np.where(urun.flag2 == 'ANNUAL_SIN')[0]
+    if len(idx)>0:
+        period[8] = uparam[idx]
+        period[9] = uparam[idx+1]
+    idx    =  np.where(urun.flag2 == 'SANNUAL_SIN')[0]
+    if len(idx)>0:
+        period[10] = uparam[idx]
+        period[11] = uparam[idx+1]
+
+    with open('period.dat', 'a') as fid:
+        fid.write("{:4.1f} {:4.1f} {:4.1f} {:4.1f} {:4.1f} {:4.1f} {:4.1f} {:4.1f} {:4.1f} {:4.1f} {:4.1f} {:4.1f} {:s}\n".format(
+            period[0], period[1], period[2], period[3], period[4], period[5], period[6],
+            period[7], period[8], period[9], period[10], period[11], nrun.site))
 
 
 
