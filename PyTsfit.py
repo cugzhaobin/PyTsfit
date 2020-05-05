@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # ----------------------------------------------------------
 # Fitting GPS coordinate time series or baseline time series
 #
@@ -111,21 +111,18 @@ class posData(object):
         plt.figure(figsize=(9,12))
         plt.subplot(3,1,1)
         plt.subplots_adjust(top=0.8)
-#       plt.scatter(self.decyr[idx], self.N[idx], s=2, color='r')
         plt.errorbar(self.decyr[idx], self.N[idx], yerr=self.SN[idx], ecolor='black',
                 elinewidth=0.2, capsize=1, capthick=0.5, fmt='o', ms=3, mfc='r', mec='black', mew=0)
         plt.ylabel('North (mm)')
 
         # East component
         plt.subplot(3,1,2)
-#       plt.scatter(self.decyr[idx], self.E[idx], s=2, color='g')
         plt.errorbar(self.decyr[idx], self.E[idx], yerr=self.SE[idx], ecolor='black',
                 elinewidth=0.2, capsize=1, capthick=0.5, fmt='o', ms=3, mfc='g', mec='black', mew=0)
         plt.ylabel('East (mm)')
 
         # Vertical component
         plt.subplot(3,1,3)
-#       plt.scatter(self.decyr[idx], self.U[idx], s=2, color='b')
         plt.errorbar(self.decyr[idx], self.U[idx], yerr=self.SU[idx], ecolor='black',
                 elinewidth=0.2, capsize=1, capthick=0.5, fmt='o', ms=3, mfc='b', mec='black', mew=0)
         plt.ylabel('Up (mm)')
@@ -815,7 +812,7 @@ class tsfitting:
         '''
         mt  = np.arange(min(self.t), max(self.t), 1/365.25)
         model = self.ifun(mt, *self.parm)
-        plt.scatter(self.t, self.obs, s=2, color='r')
+        plt.plot(self.t, self.obs, 'ro', ms=2)
         plt.plot(self.t, model, color='b')
         
         plt.title(self.site)
@@ -1233,8 +1230,8 @@ def plot_obs_mod(nrun, erun, urun, nparam, eparam, uparam, plot_dict, showFig=Fa
 
     pidx = np.where(nrun.sigma<50)[0]
     plt.errorbar(nrun.t[pidx], nrun.obs[pidx]-nobs_correct[pidx], yerr=nrun.sigma[pidx], ecolor='gray',
-            elinewidth=0.2, capsize=1, capthick=0.5, fmt='o', ms=3, mfc='r', mec='black', mew=0)
-    plt.plot(nt, nm-nmod_correct, color='black')
+            elinewidth=0.2, capsize=1, capthick=0.5, fmt='o', ms=3, mfc='r', mec='black', mew=0, zorder=1)
+    plt.plot(nt, nm-nmod_correct, color='black', zorder=2)
     plt.ylabel('North (mm)')
 
     #####################################################################
@@ -1251,8 +1248,8 @@ def plot_obs_mod(nrun, erun, urun, nparam, eparam, uparam, plot_dict, showFig=Fa
 
     pidx = np.where(erun.sigma<50)[0]
     plt.errorbar(erun.t[pidx], erun.obs[pidx]-eobs_correct[pidx], yerr=erun.sigma[pidx], ecolor='gray',
-            elinewidth=0.2, capsize=1, capthick=0.5, fmt='o', ms=3, mfc='g', mec='black', mew=0)
-    plt.plot(et, em-emod_correct, color='black')
+            elinewidth=0.2, capsize=1, capthick=0.5, fmt='o', ms=3, mfc='g', mec='black', mew=0, zorder=1)
+    plt.plot(et, em-emod_correct, color='black', zorder=2)
     plt.ylabel('East (mm)')
 
     
@@ -1269,8 +1266,8 @@ def plot_obs_mod(nrun, erun, urun, nparam, eparam, uparam, plot_dict, showFig=Fa
         plt.title(r'vel=%.2f $\pm$ %.2f mm/yr' %(uparam[idx], np.sqrt(np.diag(urun.cov))[idx]), loc='left')
     pidx = np.where(urun.sigma<25)[0]
     plt.errorbar(urun.t[pidx], urun.obs[pidx]-uobs_correct[pidx], yerr=urun.sigma[pidx], ecolor='gray',
-            elinewidth=0.2, capsize=1, capthick=0.5, fmt='o', ms=3, mfc='b', mec='black', mew=0)
-    plt.plot(ut, um-umod_correct, color='black')
+            elinewidth=0.2, capsize=1, capthick=0.5, fmt='o', ms=3, mfc='b', mec='black', mew=0, zorder=1)
+    plt.plot(ut, um-umod_correct, color='black', zorder=2)
     plt.ylabel('Up (mm)')
     plt.xlabel('Time (year)')
     plt.suptitle(nrun.site)
