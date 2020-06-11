@@ -607,19 +607,29 @@ class tsfitting:
                                 pinit[i] = self.correct.offsetdata[indx][0,1]
                                 lb[i]    = pinit[i]-1e-6
                                 ub[i]    = pinit[i]+1e-6
-                                break
+                                i        = i+1
+                                j        = j+1
+                                continue
                             elif self.component == 'E' and len(indx)>0:
                                 pinit[i] = self.correct.offsetdata[indx][0,0]
                                 lb[i]    = pinit[i]-1e-6
                                 ub[i]    = pinit[i]+1e-6
-                                break
+                                i        = i+1
+                                j        = j+1
+                                continue
                             elif self.component == 'U' and len(indx)>0:
                                 pinit[i] = self.correct.offsetdata[indx][0,2]
                                 lb[i]    = pinit[i]-1e-6
                                 ub[i]    = pinit[i]+1e-6
-                                break
-                i = i+1
-                j = j+1
+                                i        = i+1
+                                j        = j+1
+                                continue
+                        else:
+                            i = i+1
+                            j = j+1
+                else:
+                    i = i+1
+                    j = j+1
             if item == 'EQDECAY':
                 lb[i+1]    = self.ieqpostlist[k].mintau
                 ub[i+1]    = self.ieqpostlist[k].maxtau
@@ -1126,6 +1136,10 @@ def output_postseismic_ts(nrun, erun, urun, time_span, otype='obs'):
     eobs_correct, emod_correct = erun.get_correct(mod_dict, time_span=time_span)
     n0, e0 = nmod_correct[0], emod_correct[0]
 
+    # vertical component
+    uobs_correct, umod_correct = urun.get_correct(mod_dict, time_span=time_span)
+    u0     = umod_correct[0]
+
     # output to file
     with open(nrun.site+'.neu', 'w') as fid:
         fid.write('# YEAR_SINCE_EQ  NORTH(mm)  EAST(mm) Up(mm)  Nsigma(mm)  Esigma(mm)  Usigma(mm)\n')
@@ -1137,7 +1151,7 @@ def output_postseismic_ts(nrun, erun, urun, time_span, otype='obs'):
         elif otype is 'obs':
             for i in range(len(t)):
                 fid.write("%12.5f %10.4f %10.4f  %10.4f %10.4f  %10.4f %10.4f\n" 
-                        %(t[i], nobs_correct[i]-n0, eobs_correct[i]-e0, 0.0,
+                        %(t[i], nobs_correct[i]-n0, eobs_correct[i]-e0, uobs_correct[i]-u0,
                             nrun.sigma[idx][i], erun.sigma[idx][i], urun.sigma[idx][i]))
 
 
