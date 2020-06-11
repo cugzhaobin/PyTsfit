@@ -557,6 +557,7 @@ class tsfitting:
 
         Mod by Zhao Bin, Jan 21, 2019. Adding constraints on EQOFFSET and BREAK
         Mod by Zhao Bin, Feb 17, 2019. Fix bug for period constraints
+        Mod by Zhao Bin, Jun 10, 2020. Fix bug for EQOFFSET
         '''
         lb    = [-np.inf]*self.nparam
         ub    =  [np.inf]*self.nparam
