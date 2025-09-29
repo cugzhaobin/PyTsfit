@@ -1,0 +1,89 @@
+\documentclass[UTF8,a4paper]{report}
+
+\usepackage[round]{natbib}
+\usepackage{graphicx}
+\usepackage{SIunits}
+\usepackage{amsmath}
+\usepackage{color}
+\usepackage{authblk}
+\usepackage{ctex}
+\usepackage{subfigure}
+\linespread{1.6}
+\usepackage{geometry}
+\geometry{margin=1.0in,tmargin=0.5in}
+\setcounter{secnumdepth}{3}
+\usepackage{framed}
+
+
+% Begin document now.
+\begin{document}
+
+\pagestyle{empty}
+\begin{center}
+\Large\scshape PyTsfit Manual
+\end{center}
+
+%\clearpage
+
+
+% Section: Introduction
+\chapter{Installation}
+\section{Lib}
+\subsection{Numpy}
+conda install numpy
+
+\subsection{Scipy}
+conda install scipy
+
+\subsection{Matplotlib}
+conda install matplotlib
+
+\subsection{Pyproj}
+pip install pyproj
+
+\chapter{Input Files}
+\section{GPS Time Series}
+PyTsfit can process GPS time series in PBO POS format.
+
+\section{Earthquake File}
+
+\section{Priori Information}
+\subsection{Secular Velocity}
+We usually need to isolate postseismic transient from GPS time series. In order to obtain postseismic displacement from raw position time series, one can estimate the velocity term along with postseismic and other terms or can just substrate a prior value. The velocity file contains prior values for these stations. The format of the file is and unit is mm/yr:
+\begin{center}
+\boxed{\textcolor{blue}{\emph{Lon, Lat, $V_{e}$, $V_{n}$, $Sig_{ve}$, $Sig_{vn}$, $Cor_{en}$, Site, Vu, $Sig_{vu}$}}}
+\end{center}
+
+\subsection{Coseismic Displacements}
+If one want to correct coseismic offsets using prior values. A coseismic displacement file should be prepared following the below format. The unit of displacement is mm.
+\begin{center}
+\boxed{\textcolor{blue}{\emph{E, N, U, Site, decimal-year}}}
+\end{center}
+
+
+\subsection{Non-earthquake Breaks}
+If one want to correct non-earthquake breaks using prior values. A coseismic displacement file should be prepared following the below format. The unit of displacement is mm.
+\begin{center}
+\boxed{\textcolor{blue}{\emph{E, N, U, Site, decimal-year}}}
+\end{center}
+
+\subsection{Periodic Displacements}
+In some cases, periodic displacements especially the vertical component should be corrected using prior values estimated from GRACE solutions. The format is listed below and unit is mm.
+\begin{center}
+\begin{framed}
+\textcolor{blue}{
+\emph{$E_{sa}$, $E_{ca}$, $E_{ssa}$, $E_{csa}$, $N_{sa}$, $N_{ca}$, $N_{ssa}$, $N_{csa}$, $U_{sa}$, $U_{ca}$, $U_{ssa}$, $U_{csa}$, Site}\\
+sa: sin annual term \qquad \qquad ssa: sin semi-annual term\\
+cs: cos annual term \qquad \qquad csa: cos semi-annual term
+}}
+
+Notice: Once you specifies the periodfile the program will attempt to correct the seasonal terms. If the site is not included in the periodfile, by default zeros will be assigned to all parameters.
+
+\end{framed}
+\end{center}
+
+
+
+
+ 
+\end{document}

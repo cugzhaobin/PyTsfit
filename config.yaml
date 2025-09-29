@@ -1,0 +1,37 @@
+dict_input:
+    eqfile     : './eq_rename'
+    velfile    : ''
+    offsetfile : ''
+    periodfile : ''
+    sitefile   : 'cmonoc.cmnc'
+    timespan   : [1998, 2024]
+    tsdir      : '../pos/'
+    tsformat   : 'pos'
+dict_param:
+    constant    : True
+    linear      : True
+    annual      : True
+    semiannual  : True
+    break       : True
+    eqoffset_ne : True
+    eqoffset_up : True
+    eqpost_ne   : False
+    eqpost_up   : False
+dict_plot:
+    detrend    : True
+    debreak    : True
+    deeqoffset : False
+    depost     : False
+    deseason   : False
+    showfig    : False
+    figformat  : 'jpg'
+dict_output:
+    tsfig       : False
+    param       : False
+    obsmod      : False
+    eqpostts    : False
+    velfile     : ''
+    eqoffset    : ''
+    break       : ''
+    eqpostdisp  : ''
+    eqpost_tspan: [2015, 2023]
