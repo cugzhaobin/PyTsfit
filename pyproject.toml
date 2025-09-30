@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pytsfit"
+version = "0.1.0"
+description = "A Python package for fitting position time series of GNSS data."
+readme = { file = "README.md", content-type = "text/markdown" }
+license = { text = "MIT" }
+authors = [
+    { name = "Bin Zhao", email = "zhaobin@cgps.ac.cn" }
+]
+maintainers = [
+    { name = "Bin Zhao", email = "zhaobin@cgps.ac.cn" }
+]
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "pandas",
+    "scipy",
+    "matplotlib",
+]
+
+[project.scripts]
+"do_pytsfit.py" = "scripts.do_pytsfit:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools.package-dir]
+"" = "src" 
+
+[tool.setuptools.packages.find]
+where = ["src"]

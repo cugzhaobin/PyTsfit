@@ -1,0 +1,15 @@
+Metadata-Version: 2.4
+Name: PyTsfit
+Version: 0.1.0
+Summary: A Python package for fitting position time series of GNSS data.
+Author-email: Your Name <you@example.com>
+Maintainer-email: Your Name <you@example.com>
+License: MIT
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: scipy
+Requires-Dist: matplotlib
+
+#PyTsfit is program used to fitting GPS position time series.

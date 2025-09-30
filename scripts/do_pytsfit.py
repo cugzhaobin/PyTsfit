@@ -1,11 +1,17 @@
 #!/usr/bin/env python
-#from PyTsfit.tsfitting import tsfitting
-from PyTsfit import *
-import glob, yaml
-import sys, argparse
+import glob, yaml, argparse
 import numpy as np
+from pytsfit.PyTsfit import eqcatalog, breakcatalog, eqPostList, correction, posData, tsfitting
 
-def main(args):
+def main():
+    parser = argparse.ArgumentParser(description="Position time series fitting.")
+    parser.add_argument('--cfgfile', type=str, required=True, help='configure file in YAML format')
+    parser.add_argument('--sitelist', type=str, required=False, help='This will overwrite the sitefile in the configure file.', nargs='+')
+    parser.add_argument('--showfig', type=str, required=False, help='Show figure.')
+    parser.add_argument('--annual', type=str, required=False, help='Estimate annual term.')
+    parser.add_argument('--semiannual', type=str, required=False, help='Estimate semiannual term.')
+    args = parser.parse_args()
+
     with open(args.cfgfile, 'r') as fid:
         lines = fid.read()
         cfg   = yaml.load(lines, Loader=yaml.FullLoader)
@@ -127,11 +133,4 @@ def main(args):
     if fid_post_disp != None: fid_post_disp.close()
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Position time series fitting.")
-    parser.add_argument('--cfgfile', type=str, required=True, help='configure file in YAML format')
-    parser.add_argument('--sitelist', type=str, required=False, help='This will overwrite the sitefile in the configure file.', nargs='+')
-    parser.add_argument('--showfig', type=str, required=False, help='Show figure.')
-    parser.add_argument('--annual', type=str, required=False, help='Estimate annual term.')
-    parser.add_argument('--semiannual', type=str, required=False, help='Estimate semiannual term.')
-    args = parser.parse_args()
-    main(args)
+    main()
