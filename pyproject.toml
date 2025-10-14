@@ -14,7 +14,7 @@ authors = [
 maintainers = [
     { name = "Bin Zhao", email = "zhaobin@cgps.ac.cn" }
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.7"
 dependencies = [
     "numpy",
     "pandas",
@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.scripts]
-"do_pytsfit.py" = "scripts.do_pytsfit:main"
+"do_pytsfit.py" = "pytsfit.scripts.do_pytsfit:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

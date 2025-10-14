@@ -1,2 +1,0 @@
-[console_scripts]
-do_pytsfit = PyTsfit.cli:main

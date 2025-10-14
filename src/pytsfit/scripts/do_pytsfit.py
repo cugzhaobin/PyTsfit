@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-import glob, yaml, argparse
+import glob, yaml, argparse, os, logging
 import numpy as np
-from pytsfit.PyTsfit import eqcatalog, breakcatalog, eqPostList, correction, posData, tsfitting
+from pytsfit.PyTsfit import *
 
 def main():
     parser = argparse.ArgumentParser(description="Position time series fitting.")
