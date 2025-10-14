@@ -1292,6 +1292,7 @@ def plot_obs_mod(nrun, erun, urun, nparam, eparam, uparam, plot_dict, nwrms=5, n
     #####################################################################
     nt, nm = nrun.get_mod()
     nobs_correct, nmod_correct = nrun.get_correct(plot_dict)
+    print(nwrms, nrun.wrms)
     pidx    = np.where(np.logical_and(nrun.sigma<nwrms*nrun.wrms, abs(nrun.res)<nsigma*nrun.sigma))[0]
     north_t = nrun.t[pidx]
     north_d = nrun.obs[pidx]-nobs_correct[pidx]

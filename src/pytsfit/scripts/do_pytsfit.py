@@ -110,7 +110,7 @@ def main():
                 continue
 
             if dict_output['tsfig'] == True:
-                plot_obs_mod(nrun, erun, urun, nparam, eparam, uparam, dict_plot, nsigma=100, nwrms=100)
+                plot_obs_mod(nrun, erun, urun, nparam, eparam, uparam, dict_plot, nsigma=3, nwrms=3)
             if dict_output['param'] == True:
                 output_param(nrun, erun, urun, nparam, eparam, uparam)
             if dict_output['obsmod'] == True:
