@@ -157,6 +157,26 @@ def test_tsfitting_plot_obs_mod_uses_param(monkeypatch):
     assert np.asarray(run.param).size == run.nparam
 
 
+def test_tsfitting_plot_obs_mod_matches_model_xy(monkeypatch):
+    # The model line must be plotted with x/y of equal length. Before the fix
+    # the model was built on the model time grid (mt) but plotted against the
+    # observed epochs (self.t), producing a ValueError from plt.plot.
+    import matplotlib.pyplot as plt
+    run = _make_run()
+    calls = []
+    monkeypatch.setattr(plt, 'plot', lambda *a, **k: calls.append(a))
+    monkeypatch.setattr(plt, 'title', lambda *a, **k: None)
+    monkeypatch.setattr(plt, 'xlabel', lambda *a, **k: None)
+    monkeypatch.setattr(plt, 'ylabel', lambda *a, **k: None)
+    monkeypatch.setattr(plt, 'show', lambda *a, **k: None)
+    run.plot_obs_mod()
+    assert len(calls) == 2
+    # calls[0] is (self.t, self.obs, 'ro'); calls[1] is (mt, model)
+    x, y = calls[1][0], calls[1][1]
+    assert len(x) == len(y)
+    assert len(x) > 0
+
+
 # ---------------------------------------------------------------------------
 # output_postseismic_disp: format-string index and unreachable return
 # ---------------------------------------------------------------------------

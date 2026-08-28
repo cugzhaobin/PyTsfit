@@ -440,7 +440,7 @@ class tsfitting:
         mt  = np.arange(min(self.t), max(self.t), 1/365.25)
         model = self.ifun(mt, *self.param)
         plt.plot(self.t, self.obs, 'ro', ms=2)
-        plt.plot(self.t, model, color='b')
+        plt.plot(mt, model, color='b')
 
         plt.title(self.site)
         plt.xlabel('Time (year)')

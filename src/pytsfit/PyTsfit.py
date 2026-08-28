@@ -32,7 +32,7 @@ __all__ = (['gt', 'gpstime', 'neuData', 'posData',
 if __name__ == '__main__':
     import time, getpass
     print("# Created by %s on %s" %(getpass.getuser(), time.asctime()))
-    text = "from PyTsfit import *\nimport glob, os\n\neqfile     = ''\nvelfile    = ''\noffsetfile = ''\nperiodfile = ''\n"
+    text = "from pytsfit.PyTsfit import *\nimport glob, os\n\neqfile     = ''\nvelfile    = ''\noffsetfile = ''\nperiodfile = ''\n"
     print("%s" %(text))
     text = "eq         = eqcatalg(eqfile)\nbk         = breakcatalog(eqfile)\neqp        = eqPostList(eqfile, eq)"
     print("%s" %(text))
