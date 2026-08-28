@@ -56,7 +56,6 @@ class eqcatalog(object):
     eacatalog is a class representing a list of earthquakes.
     '''
 
-    eqlist = []
     def __init__(self, eqfile):
         '''
         Constructor.
@@ -64,6 +63,10 @@ class eqcatalog(object):
         Input:
             eqfile  = eq_rename file in GAMIT/GLOBK format
         '''
+
+        # per-instance list: a class-level list would be shared across every
+        # eqcatalog and accumulate duplicates on repeated construction
+        self.eqlist = []
 
         # check the file exist.
         if os.path.isfile(eqfile) == False:
@@ -130,7 +133,6 @@ class eqPostList(object):
     '''
     eqPostList is a class representing a list of eqPost
     '''
-    eqpostlist = []
     def __init__(self, eqfile, eqlist):
         '''
         Construvtor
@@ -139,6 +141,8 @@ class eqPostList(object):
             eqfile  = eq_rename.eq
             eqlist  = an instance of class eqcatalog
         '''
+        # per-instance list (see note on eqcatalog.eqlist)
+        self.eqpostlist = []
         if os.path.isfile(eqfile) == False:
             logging.fatal(' The input file %s does not exist!' %(eqfile))
             sys.exit()
@@ -157,7 +161,7 @@ class eqPostList(object):
                         mintau = line.split()[2]
                         maxtau = line.split()[3]
                         event  = eqlist.getEQ(code)
-                        eqpost = eqPost(event, "LOG", mintau, maxtau)
+                        eqpost = eqPost(event, "EXP", mintau, maxtau)
                         self.eqpostlist.append(eqpost)
 
 
@@ -189,15 +193,13 @@ class offset(object):
             t    = a list/array of decimal year
             amp  = amplitude of offset/step
         '''
-        return amp * np.heaviside(t-self.decyr(), 0)
+        return amp * np.heaviside(t-self.decyr, 0)
 
 
 class breakcatalog(object):
     '''
     breakcatalog is a class representing a list instance of class offset
     '''
-
-    breaklist = []
 
     def __init__(self, breakfile):
         '''
@@ -206,6 +208,9 @@ class breakcatalog(object):
         Input:
             breakfile = eq_rename in GAMIT/GLOBK format
         '''
+
+        # per-instance list (see note on eqcatalog.eqlist)
+        self.breaklist = []
 
         # check the file exist
         if os.path.isfile(breakfile) == False:

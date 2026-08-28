@@ -8,6 +8,7 @@ Created on Sat Mar 28 19:48:51 2020
 
 from pytsfit.PyTsfit import posData, tsfitting
 import glob, sys, time
+import logging
 import emcee, corner, argparse
 import numpy as np
 from scipy.linalg import norm
@@ -129,6 +130,9 @@ def set_bound(flag, cor, site, component='E'):
     return popt
 
 def main(args):
+    logging.basicConfig(level=logging.INFO,
+        format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
+        datefmt="%d-%m-%Y %H:%M:%S")
     eqfile     = './eq_rename.cors'
     velfile    = './model.vel.gmtvec'
     offsetfile = ''

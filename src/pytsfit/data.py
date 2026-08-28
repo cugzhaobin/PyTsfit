@@ -116,7 +116,7 @@ class posData(object):
                                 for i in range(len(self.MJD))])
 
 
-    def plot_pos(self, time_range=[], show=False):
+    def plot_pos(self, time_range=None, show=False):
         '''
         Plot raw POS time series.
 
@@ -124,7 +124,7 @@ class posData(object):
             time_range = [start_time, end_time] in decimal year
         '''
 
-        if len(time_range) == 2:
+        if time_range is not None and len(time_range) == 2:
             idx = np.where(np.logical_and(self.decyr>time_range[0],
                                           self.decyr<time_range[1]))[0]
         else:
@@ -151,7 +151,7 @@ class posData(object):
                 elinewidth=0.2, capsize=1, capthick=0.5, fmt='o', ms=3, mfc='b', mec='black', mew=0)
         plt.ylabel('Up (mm)')
         plt.xlabel('Time (year)')
-        if len(time_range) == 2:
+        if time_range is not None and len(time_range) == 2:
             plt.xlim(time_range)
 
         plt.suptitle("Time Series of Site Position drawn by zhao at Institute of Seismology\n\nStation: "+self.site+"\n\n %10.3fN %10.3fE %6.2f(m)\n\n %d Daily solution (%7.2f-%7.2f)" %(self.lat, self.lon, self.hei, len(idx), min(self.decyr[idx]), max(self.decyr[idx])), fontsize=15)

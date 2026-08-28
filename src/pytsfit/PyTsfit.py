@@ -15,10 +15,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 
-logging.basicConfig(level=logging.INFO,
-    format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
-    datefmt="%d-%m-%Y %H:%M:%S")
-
 from pytsfit import *  # noqa: F401,F403  (re-export the public API)
 
 # Re-export the names the old module exposed at top level (beyond its own

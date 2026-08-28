@@ -3,7 +3,25 @@ import glob, yaml, argparse, os, logging
 import numpy as np
 from pytsfit.PyTsfit import *
 
+# Header lines describing the columns of each output file. These are written
+# as '#' comment lines so they are ignored by GMT and np.genfromtxt.
+HEADER_VELO      = '# Lon(deg)  Lat(deg)  Ve(mm/yr)  Vn(mm/yr)  Ve(mm/yr)  Vn(mm/yr)  Se(mm/yr)  Sn(mm/yr)  Corr  Vu(mm/yr)  Vu(mm/yr)  Su(mm/yr)  Site  #  tstart(yr)  tend(yr)  tspan(yr)  nobs\n'
+HEADER_EQOFFSET  = '# Lon(deg)  Lat(deg)  E_off(mm)  N_off(mm)  U_off(mm)  Se(mm)  Sn(mm)  Su(mm)  Site  #  EQ_code\n'
+HEADER_POSTDISP  = '# Lon(deg)  Lat(deg)  E_disp(mm)  N_disp(mm)  E_wrms(mm)  N_wrms(mm)  Corr  Site  U_disp(mm)  U_wrms(mm)\n'
+
+def write_header_if_empty(fid, fname, header):
+    '''
+    Write a comment header line to the output file if it is empty.
+    The output files are opened in append mode, so this avoids writing a
+    duplicate header on subsequent runs of the same script.
+    '''
+    if os.path.getsize(fname) == 0:
+        fid.write(header)
+
 def main():
+    logging.basicConfig(level=logging.INFO,
+        format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
+        datefmt="%d-%m-%Y %H:%M:%S")
     parser = argparse.ArgumentParser(description="Position time series fitting.")
     parser.add_argument('--cfgfile', type=str, required=True, help='configure file in YAML format')
     parser.add_argument('--sitelist', type=str, required=False, help='This will overwrite the sitefile in the configure file.', nargs='+')
@@ -42,15 +60,14 @@ def main():
               'linear'    : dict_param['linear'],
               'ANN'       : dict_param['annual'],
               'SANN'      : dict_param['semiannual'],
+              'eqlist'    : [],
+              'eqpostlist': [],
+              'brklist'   : [],
               'correct'   : constraint}
-    if args.annual == "True" or args.annual == "true":
-        param_dict['ANN'] = True
-    else:
-        param_dict['ANN'] = False
-    if args.semiannual == "True" or args.semiannual == "true":
-        param_dict['SANN'] = True
-    else:
-        param_dict['SANN'] = False
+    if args.annual is not None:
+        param_dict['ANN'] = args.annual.lower() == 'true'
+    if args.semiannual is not None:
+        param_dict['SANN'] = args.semiannual.lower() == 'true'
     if dict_param['eqoffset_ne'] == True or dict_param['eqoffset_up'] == True:
         eq = eqcatalog(eqfile)
         param_dict['eqlist'] = eq.eqlist
@@ -68,16 +85,18 @@ def main():
     fid_post_disp = None
     if len(dict_output['velfile'])>0:
         fid_velo = open(dict_output['velfile'], 'a')
+        write_header_if_empty(fid_velo, dict_output['velfile'], HEADER_VELO)
     if len(dict_output['eqoffset'])>0:
         fid_eq   = open(dict_output['eqoffset'], 'a')
+        write_header_if_empty(fid_eq, dict_output['eqoffset'], HEADER_EQOFFSET)
     if len(dict_output['break'])>0:
         fid_brk  = open(dict_output['break'], 'a')
     if len(dict_output['eqpostdisp']) > 0:
         fid_post_disp = open(dict_output['eqpostdisp'], 'a')
-
-
+        write_header_if_empty(fid_post_disp, dict_output['eqpostdisp'], HEADER_POSTDISP)
 
     for i in range(len(sitelist)):
+        print(60*'-')
         posfiles = glob.glob('{}/{}*.{}'.format(tsdir, sitelist[i], tsformat))
         for j in range(len(posfiles)):
             logging.info('fitting time series for {}'.format(posfiles[j]))
@@ -118,7 +137,7 @@ def main():
             if len(dict_output['velfile']) > 0:
                 output_velo(nrun, erun, urun, fid=fid_velo, fmt='DETAIL')
             if len(dict_output['eqoffset']) > 0:
-                output_eqoffset(nrun, erun, urun, fid=fid_eq)
+                output_eqoffset(nrun, erun, urun, fid=fid_eq, fmt='GMT3D')
             if len(dict_output['break']) > 0:
                 output_break(nrun, erun, urun, fid=fid_brk)
             if len(dict_output['eqpostdisp']) > 0:

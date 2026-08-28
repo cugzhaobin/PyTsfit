@@ -116,6 +116,9 @@ def set_bound(flag, cor, site, component='E'):
     return popt
 
 def main(args):
+    logging.basicConfig(level=logging.INFO,
+        format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
+        datefmt="%d-%m-%Y %H:%M:%S")
     with open(args.cfgfile, 'r') as fid:
         lines = fid.read()
         cfg   = yaml.load(lines, Loader=yaml.FullLoader)

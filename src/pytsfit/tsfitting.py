@@ -44,7 +44,7 @@ class tsfitting:
     # parmeters
     param = []
 
-    def __init__(self, site, lon, lat, t, obs, sigma, param_dict, component='N', time_range=[-np.inf, np.inf]):
+    def __init__(self, site, lon, lat, t, obs, sigma, param_dict, component='N', time_range=None):
         '''
         Constructor.
 
@@ -73,6 +73,8 @@ class tsfitting:
         self.ibrklist = []
         self.component= component
 
+        if time_range is None:
+            time_range = [-np.inf, np.inf]
         idx  = np.where(np.logical_and(t>time_range[0], t<time_range[1]))[0]
         if len(idx) < 2: return
         self.lon      = lon
@@ -253,9 +255,9 @@ class tsfitting:
                         brk   = self.ibrklist[m]
                         brkid = brkid+1
                         if len(np.where(self.correct.offsetsite==self.site)[0])>0 and\
-                                len(np.where(abs(self.correct.offsetdata[:,4]-brk.decyr)<0.01)[0]):
+                                len(np.where(abs(self.correct.offsetyear-brk.decyr)<0.01)[0]):
                             indx1 = set(np.where(self.correct.offsetsite==self.site)[0])
-                            indx2 = set(np.where(abs(self.correct.offsetdata[:,4]-brk.decyr)<0.01)[0])
+                            indx2 = set(np.where(abs(self.correct.offsetyear-brk.decyr)<0.01)[0])
                             indx  = list(indx1 & indx2)
                             if self.component == 'N' and len(indx)>0:
                                 pinit[i] = self.correct.offsetdata[indx][0,1]
@@ -436,7 +438,7 @@ class tsfitting:
         Plot time series of observation and models
         '''
         mt  = np.arange(min(self.t), max(self.t), 1/365.25)
-        model = self.ifun(mt, *self.parm)
+        model = self.ifun(mt, *self.param)
         plt.plot(self.t, self.obs, 'ro', ms=2)
         plt.plot(self.t, model, color='b')
 
@@ -445,13 +447,13 @@ class tsfitting:
         plt.ylabel('Displacement (mm)')
         plt.show()
 
-    def get_mod(self, time_span=[]):
+    def get_mod(self, time_span=None):
         '''
         Output modeled time series
 
         Mod by Zhao Bin, Jan 31, 2019. Adding parameter time_span
         '''
-        if len(time_span) == 2:
+        if time_span is not None and len(time_span) == 2:
             mt = np.arange(min(time_span), max(time_span), 1/365.25)
         else:
             mt = np.arange(min(self.t), max(self.t), 1/365.25)
@@ -459,7 +461,7 @@ class tsfitting:
         m    = mfun(mt, *self.param)
         return mt, m
 
-    def get_correct(self, mod_dict, time_span=[], eqcode=None):
+    def get_correct(self, mod_dict, time_span=None, eqcode=None):
         '''
         Retrieve modeled time series according to mod_dict at observed and modeled time list
 
@@ -502,13 +504,13 @@ class tsfitting:
 
         obs_correct = np.array([])
         mod_correct = np.array([])
-        if len(time_span) == 2:
+        if time_span is not None and len(time_span) == 2:
             idx    = np.where(np.logical_and(self.t>time_span[0], self.t<time_span[1]))[0]
             if len(idx) > 0:
                 obs_correct = self.ifun(self.t[idx], *param)
         else:
             obs_correct = self.ifun(self.t, *param)
-        if len(time_span) == 2:
+        if time_span is not None and len(time_span) == 2:
             mt = np.arange(min(time_span), max(time_span), 1/365.25)
         else:
             mt = np.arange(min(self.t), max(self.t), 1/365.25)

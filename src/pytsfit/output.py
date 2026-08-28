@@ -131,7 +131,7 @@ def output_postseismic_disp(nrun, erun, urun, time_span, fid=None, eqcode=None):
     if len(idx) > 0:
         nobs_correct, nmod_correct = nrun.get_correct(mod_dict, time_span=time_span, eqcode=eqcode)
         if len(nmod_correct) == 0:
-            logging.warning("No correction model for {1:s}".format(nrun.site))
+            logging.warning("No correction model for {0:s}".format(nrun.site))
             return
         ndisp = nmod_correct[-1]-nmod_correct[0]
 
@@ -141,7 +141,7 @@ def output_postseismic_disp(nrun, erun, urun, time_span, fid=None, eqcode=None):
     if len(idx) > 0:
         eobs_correct, emod_correct = erun.get_correct(mod_dict, time_span=time_span, eqcode=eqcode)
         if len(emod_correct) == 0:
-            logging.warning("No correction model for {1:s}".format(erun.site))
+            logging.warning("No correction model for {0:s}".format(erun.site))
             return
         edisp = emod_correct[-1]-emod_correct[0]
 
@@ -150,9 +150,9 @@ def output_postseismic_disp(nrun, erun, urun, time_span, fid=None, eqcode=None):
     idx    = np.where(np.logical_and(ut>time_span[0], ut<time_span[1]))[0]
     if len(idx) > 0:
         uobs_correct, umod_correct = urun.get_correct(mod_dict, time_span=time_span, eqcode=eqcode)
-        if len(emod_correct) == 0:
+        if len(umod_correct) == 0:
+            logging.warning("No correction model for {0:s}".format(urun.site))
             return
-            logging.warning("No correction model for {1:s}".format(nrun.site))
         udisp = umod_correct[-1]-umod_correct[0]
 
     # print the results
