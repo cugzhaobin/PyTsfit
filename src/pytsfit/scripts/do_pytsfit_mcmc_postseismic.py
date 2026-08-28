@@ -6,7 +6,7 @@ Created on Sat Mar 28 19:48:51 2020
 @author: zhao
 """
 
-from PyTsfit import posData, tsfitting
+from pytsfit.PyTsfit import posData, tsfitting
 import glob, sys, time
 import emcee, corner, argparse
 import numpy as np

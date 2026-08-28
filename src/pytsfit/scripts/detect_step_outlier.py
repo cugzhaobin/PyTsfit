@@ -1,5 +1,5 @@
 #from PyTsfit.tsfitting import tsfitting
-from PyTsfit import *
+from pytsfit.PyTsfit import *
 from sklearn import linear_model
 
 

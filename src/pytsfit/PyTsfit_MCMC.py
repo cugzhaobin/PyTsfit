@@ -6,7 +6,7 @@ Created on Sat Mar 28 19:48:51 2020
 @author: zhao
 """
 
-from PyTsfit import *
+from pytsfit.PyTsfit import *
 import glob, sys, time, os
 import emcee, corner
 import numpy as np

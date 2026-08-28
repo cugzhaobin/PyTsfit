@@ -6,10 +6,10 @@ Created on Sat Mar 28 19:48:51 2020
 @author: zhao
 """
 
-from PyTsfit import posData, correction, tsfitting, neuData
-from PyTsfit import eqcatalog, breakcatalog, eqPostList
-from PyTsfit import plot_obs_mod, output_param, output_obs_mod,output_velo,output_eqoffset
-from PyTsfit import output_break,output_postseismic_disp,output_postseismic_ts
+from pytsfit.PyTsfit import posData, correction, tsfitting, neuData
+from pytsfit.PyTsfit import eqcatalog, breakcatalog, eqPostList
+from pytsfit.PyTsfit import plot_obs_mod, output_param, output_obs_mod,output_velo,output_eqoffset
+from pytsfit.PyTsfit import output_break,output_postseismic_disp,output_postseismic_ts
 import glob, emcee, corner, argparse, logging, yaml, os
 import numpy as np
 import matplotlib.pyplot as plt

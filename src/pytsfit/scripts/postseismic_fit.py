@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #from PyTsfit.tsfitting import tsfitting
-from PyTsfit import *
+from pytsfit.PyTsfit import *
 import glob
 import sys
 import numpy as np

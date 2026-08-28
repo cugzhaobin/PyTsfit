@@ -1,6 +1,6 @@
 import glob, sys
 import numpy as np
-from PyTsfit import eqcatalog, breakcatalog, eqPostList, correction, posData, tsfitting
+from pytsfit.PyTsfit import eqcatalog, breakcatalog, eqPostList, correction, posData, tsfitting
 
 eqfile     = './eq_rename.cors'
 velfile    = './velomodel.vel.gmtvec'
