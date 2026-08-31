@@ -25,7 +25,7 @@ __all__ = (['gt', 'gpstime', 'neuData', 'posData',
             'output_velo', 'output_postseismic_velo', 'output_postseismic_disp',
             'output_eqoffset', 'output_break', 'output_postseismic_ts',
             'output_period', 'output_summary', 'plot_obs_mod',
-            'output_obs_mod', 'output_param']
+            'output_obs_mod', 'output_param', 'build_param_dict']
            + ['np', 'plt', 'curve_fit', 'os', 'sys', 'logging'])
 
 

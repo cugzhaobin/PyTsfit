@@ -1,12 +1,12 @@
 dict_input:
-    eqfile     : './eq_rename'
-    velfile    : ''
-    offsetfile : ''
-    periodfile : ''
-    sitefile   : 'cmonoc.cmnc'
-    timespan   : [1998, 2024]
-    tsdir      : '../pos/'
-    tsformat   : 'pos'
+    eqfile           : './eq_rename'
+    prior_velfile    : ''
+    prior_offsetfile : ''
+    prior_periodfile : ''
+    sitefile         : 'cmonoc.cmnc'
+    timespan         : [1998, 2024]
+    tsdir            : '../pos/'
+    tsformat         : 'pos'
 dict_param:
     constant    : True
     linear      : True
@@ -25,6 +25,16 @@ dict_plot:
     deseason   : False
     showfig    : False
     figformat  : 'jpg'
+dict_fit:
+    sigma_scale    : 'nrms'      # none | nrms | realistic
+    min_rsig       : 30          # minimum used points for realistic sigma
+    min_sigscale   : 10          # minimum dof below which sig_scale = 1
+    outlier        : False       # enable iterative outlier editing
+    nsigma         : 4.0
+    outlier_scale  : 'mad'       # mad | sigma
+    max_iter       : 10
+    restore_factor : 0.9
+    max_sigma      : 0.0         # pre-fit sigma screen (mm); 0 = off
 dict_output:
     tsfig       : False
     param       : False

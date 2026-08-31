@@ -8,6 +8,7 @@ import os, sys, logging
 import numpy as np
 import matplotlib.pyplot as plt
 from . import geotools as gt
+from . import qualitycontrol as qc
 from scipy.optimize import curve_fit
 
 class tsfitting:
@@ -44,7 +45,7 @@ class tsfitting:
     # parmeters
     param = []
 
-    def __init__(self, site, lon, lat, t, obs, sigma, param_dict, component='N', time_range=None):
+    def __init__(self, site, lon, lat, t, obs, sigma, param_dict, component='N', time_range=None, fit_opts=None):
         '''
         Constructor.
 
@@ -58,6 +59,8 @@ class tsfitting:
             param_dict = {}
             component  = "N/E/U"
             time_range = time range for fitting
+            fit_opts   = optional dict of fitting/quality-control options
+                         (see qualitycontrol.DEFAULT_FIT_OPTS)
         '''
         self.nparam   = 0
         self.t        = []
@@ -86,6 +89,16 @@ class tsfitting:
         self.midt     = (self.t[0]+self.t[-1])/2
         mint          = min(self.t)
         maxt          = max(self.t)
+
+        # Fitting / quality-control options and per-point masks. The masks are
+        # always the full length of self.t so residuals/plots stay aligned.
+        self.fit_opts = qc.merge_fit_opts(fit_opts)
+        self.maxsig_mask = np.zeros(len(self.t), dtype=bool)
+        max_sigma = self.fit_opts.get('max_sigma')
+        if max_sigma is not None and max_sigma > 0:
+            self.maxsig_mask = np.asarray(self.sigma) > max_sigma
+        self.edt_mask   = np.zeros(len(self.t), dtype=bool)   # editor-flagged
+        self.good       = ~self.maxsig_mask                   # usable points
 
 
         # Constant term
@@ -343,29 +356,119 @@ class tsfitting:
         '''
 
         if len(self.flag) == 0: return np.empty(0)
-
-        # function
-        ifun          = self.full_filter(self.t)
+        if not hasattr(self, 'fit_opts') or len(self.t) == 0: return np.empty(0)
 
         # set lower and upper bounds and initial parameters
         lb, ub, pinit = self.setBoundAndInit()
 
-        # fit curve
+        opts        = self.fit_opts
+        outlier     = bool(opts.get('outlier', False))
+        max_iter    = int(opts.get('max_iter', 10))
+        nsigma      = float(opts.get('nsigma', 4.0))
+        scale_mode  = opts.get('outlier_scale', 'mad')
+        restore_f   = float(opts.get('restore_factor', 0.9))
+        sigma_scale = opts.get('sigma_scale', 'nrms')
+
+        edt_mask = self.edt_mask.copy()
+        good = ~edt_mask & ~self.maxsig_mask
+
+        # Iterate: fit -> flag outliers -> refit, until the usable set stops
+        # changing (mirrors tsfit's ``do while(edits)`` loop around edit_ns).
+        self.niter = 0
+        popt = np.empty(0)
+        pcov = None
         try:
-            popt, pcov = curve_fit(ifun,
-                               self.t,
-                               self.obs,
-                               sigma=self.sigma,
-                               p0=pinit,
-                               bounds=[lb, ub])
-            self.param = popt
-            self.cov   = pcov
-            self.ifun  = ifun
-            self.res   = self.obs-ifun(self.t, *popt)
-            self.wrms  = np.sqrt(sum((self.res/self.sigma)**2)/sum(1.0/self.sigma**2))
-            return popt
-        except:
+            for it in range(max_iter + 1):
+                self.niter = it
+                good = ~edt_mask & ~self.maxsig_mask
+                ifun = self.full_filter(self.t)          # closure uses its arg t
+                if good.sum() < self.nparam:
+                    logging.warning('Too few usable points to fit component %s', self.component)
+                    return np.array([])
+
+                absolute_sigma = sigma_scale != 'nrms'
+                popt, pcov = curve_fit(ifun,
+                                       self.t[good],
+                                       self.obs[good],
+                                       sigma=self.sigma[good],
+                                       p0=pinit,
+                                       bounds=[lb, ub],
+                                       absolute_sigma=absolute_sigma)
+
+                # Residuals over the full series so downstream writers/plots
+                # stay aligned with self.t/self.obs.
+                res_full = self.obs - ifun(self.t, *popt)
+
+                g = np.asarray(self.sigma)[good]
+                chi2 = float(np.sum((res_full[good] / g) ** 2))
+                dof  = int(good.sum()) - self.nparam
+                nrms = np.sqrt(chi2 / dof) if dof > 0 else 1.0
+
+                if not outlier:
+                    break
+
+                new_edt = qc.flag_outliers(res_full, np.asarray(self.sigma),
+                                           edt_mask, nsigma, scale_mode=scale_mode,
+                                           nrms=nrms, restore_factor=restore_f)
+                if np.array_equal(new_edt, edt_mask):
+                    break
+                new_good = ~new_edt & ~self.maxsig_mask
+                # Do not let editing collapse the degrees of freedom below the
+                # minimum the user asked for.
+                if new_good.sum() - self.nparam < opts.get('min_sigscale', 10):
+                    logging.warning('Outlier editing stopped to preserve degrees of freedom')
+                    break
+                edt_mask = new_edt
+        except Exception as exc:
+            logging.warning('Fitting failed for component %s: %s', self.component, exc)
             return np.array([])
+
+        # Finalise the per-point masks and residual statistics.
+        self.edt_mask = edt_mask
+        self.good     = ~edt_mask & ~self.maxsig_mask
+        self.nedit    = int(np.sum(self.edt_mask))
+
+        # Recompute residuals once more from the converged solution.
+        ifun = self.full_filter(self.t)
+        self.res  = self.obs - ifun(self.t, *popt)
+        g = np.asarray(self.sigma)[good]
+        self.chi2 = float(np.sum((self.res[good] / g) ** 2))
+        self.dof  = int(good.sum()) - self.nparam
+        self.nrms = np.sqrt(self.chi2 / self.dof) if self.dof > 0 else 1.0
+
+        # Apply the requested covariance scaling.
+        self.sig_scale = 1.0
+        self.tau       = None
+        if sigma_scale == 'nrms':
+            # Leave pcov exactly as curve_fit returned it. Its default
+            # absolute_sigma=False already scales N^-1 by chi2/dof, i.e. this
+            # is the classic white-noise NRMS rescale (tsfit's fallback).
+            self.cov = pcov
+            self.sig_scale = self.nrms if self.dof > 0 else 1.0
+        elif sigma_scale == 'none':
+            self.cov = pcov                       # N^-1 (absolute_sigma=True)
+        elif sigma_scale == 'realistic':
+            t_days = (np.asarray(self.t) - np.asarray(self.t).min()) * 365.25
+            sig_scale, tau = qc.realistic_sigma(t_days, self.res,
+                                                np.asarray(self.sigma), good)
+            if sig_scale is None or good.sum() <= opts.get('min_rsig', 30):
+                sig_scale, tau = self.nrms, None
+            if self.dof < opts.get('min_sigscale', 10):
+                sig_scale = 1.0
+            self.sig_scale = sig_scale
+            self.tau       = tau
+            self.cov = pcov * (sig_scale ** 2)
+        else:
+            logging.warning('Unknown sigma_scale %r; using unscaled covariance', sigma_scale)
+            self.cov = pcov
+
+        self.param = popt
+        self.ifun  = ifun
+
+        # WRMS over usable points only (all points when editing is off).
+        self.wrms = np.sqrt(sum((self.res[good] / np.asarray(self.sigma)[good])**2) /
+                            sum(1.0 / np.asarray(self.sigma)[good]**2))
+        return popt
 
 
     def full_filter(self, t):

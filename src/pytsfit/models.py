@@ -279,3 +279,54 @@ class correction(object):
             self.perioddata = np.genfromtxt(periodfile, comments='#')
             self.periodsite = np.genfromtxt(periodfile, comments='#', usecols=[12], dtype='4S')
             self.periodsite = np.array([i.decode() for i in self.periodsite])
+
+
+def build_param_dict(dict_param, eqfile, prior_velfile='', prior_offsetfile='',
+                     prior_periodfile=''):
+    '''
+    Assemble the ``param_dict`` handed to ``tsfitting`` from a ``dict_param``
+    section (the ``dict_param`` block of the YAML config) plus the eqfile and
+    optional prior file paths.
+
+    Reused by the CLI entry (``do_pytsfit``) and the web UI so the model
+    setup stays in one place.
+
+    Input:
+        dict_param         = the 'dict_param' section of the YAML config, e.g.
+                             {'constant': True, 'linear': True, 'annual': True,
+                              'semiannual': True, 'break': True,
+                              'eqoffset_ne': True, 'eqoffset_up': True,
+                              'eqpost_ne': False, 'eqpost_up': False}
+        eqfile             = path to the earthquake catalog file
+        prior_velfile      = optional prior secular velocity file
+        prior_offsetfile   = optional prior coseismic offset file
+        prior_periodfile   = optional prior seasonal (GRACE) file
+
+    Output:
+        param_dict = {'constant':..., 'linear':..., 'ANN':..., 'SANN':...,
+                      'eqlist':..., 'eqpostlist':..., 'brklist':...,
+                      'correct':...} suitable for tsfitting.__init__
+    '''
+    constraint = correction(prior_velfile, prior_offsetfile, prior_periodfile)
+    param_dict = {
+              'constant'  : dict_param['constant'],
+              'linear'    : dict_param['linear'],
+              'ANN'       : dict_param['annual'],
+              'SANN'      : dict_param['semiannual'],
+              'eqlist'    : [],
+              'eqpostlist': [],
+              'brklist'   : [],
+              'correct'   : constraint}
+    eq = None
+    if dict_param['eqoffset_ne'] == True or dict_param['eqoffset_up'] == True:
+        eq = eqcatalog(eqfile)
+        param_dict['eqlist'] = eq.eqlist
+    if dict_param['break'] == True:
+        bk = breakcatalog(eqfile)
+        param_dict['brklist'] = bk.breaklist
+    if dict_param['eqpost_ne'] == True or dict_param['eqpost_up'] == True:
+        if eq is None:
+            eq = eqcatalog(eqfile)
+        eqp = eqPostList(eqfile, eq)
+        param_dict['eqpostlist'] = eqp.eqpostlist
+    return param_dict

@@ -1,5 +1,5 @@
 #from PyTsfit.tsfitting import tsfitting
-from pytsfit.PyTsfit import *
+from pytsfit.data import posData
 from sklearn import linear_model
 
 

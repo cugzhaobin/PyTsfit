@@ -19,8 +19,11 @@ from . import GPSTime as gpstime
 
 from .data import neuData, posData
 from .models import (earthquake, eqcatalog, eqPost, eqPostList,
-                     offset, breakcatalog, correction)
+                     offset, breakcatalog, correction, build_param_dict)
 from .tsfitting import tsfitting
+from . import qualitycontrol
+from .qualitycontrol import (DEFAULT_FIT_OPTS, merge_fit_opts, robust_scale,
+                             realistic_sigma, flag_outliers)
 from .output import (output_velo, output_postseismic_velo, output_postseismic_disp,
                      output_eqoffset, output_break, output_postseismic_ts,
                      output_period, output_summary, plot_obs_mod,
@@ -33,9 +36,12 @@ __all__ = [
     'neuData', 'posData',
     # models
     'earthquake', 'eqcatalog', 'eqPost', 'eqPostList',
-    'offset', 'breakcatalog', 'correction',
+    'offset', 'breakcatalog', 'correction', 'build_param_dict',
     # fitting engine
     'tsfitting',
+    # quality control
+    'qualitycontrol', 'DEFAULT_FIT_OPTS', 'merge_fit_opts', 'robust_scale',
+    'realistic_sigma', 'flag_outliers',
     # output / plotting
     'output_velo', 'output_postseismic_velo', 'output_postseismic_disp',
     'output_eqoffset', 'output_break', 'output_postseismic_ts',

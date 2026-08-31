@@ -221,7 +221,9 @@ def output_break(nrun, erun, urun, fid=None):
     idx = nrun.flag2.tolist().index('BREAK')
     if fid is not None:
         for i in range(len(nrun.ibrklist)):
-            print("%10.3f %10.3f %10.3f" %(erun.param[idx+i], nrun.param[idx+i], nrun.ibrklist[i].decyr))
+            line = "%10.3f %10.3f %10.3f\n" %(erun.param[idx+i], nrun.param[idx+i], nrun.ibrklist[i].decyr)
+            fid.write(line)
+            print(line.rstrip())
 
 def output_postseismic_ts(nrun, erun, urun, time_span, otype='obs', eqcode=None):
     '''
@@ -335,10 +337,19 @@ def output_summary(nrun, erun, urun, fid=None):
 
     fid.write(" %10.3f %10.3f %10.3f %10.3f %10.3f %10d %10.3f %10.3f %10.3f %6s\n"
                 %(nrun.lon, nrun.lat, min(nrun.t), max(nrun.t), max(nrun.t)-min(nrun.t), len(nrun.obs), erun.wrms, nrun.wrms, urun.wrms, nrun.site))
+    # When realistic-sigma scaling is enabled, report the per-component scale
+    # and correlation time alongside the WRMS line (mirrors tsfit's Real_Sigma).
+    if getattr(nrun, 'fit_opts', {}).get('sigma_scale') == 'realistic':
+        fid.write("# Real_Sigma: White Noise NRMS %6.2f %6.2f %6.2f  RS NRMS %6.2f %6.2f %6.2f  Tau(days) %6.1f %6.1f %6.1f\n"
+                    %(erun.nrms, nrun.nrms, urun.nrms,
+                      erun.sig_scale, nrun.sig_scale, urun.sig_scale,
+                      erun.tau if erun.tau is not None else -1.0,
+                      nrun.tau if nrun.tau is not None else -1.0,
+                      urun.tau if urun.tau is not None else -1.0))
 
 
 
-def plot_obs_mod(nrun, erun, urun, nparam, eparam, uparam, plot_dict, nwrms=5, nsigma=3):
+def plot_obs_mod(nrun, erun, urun, nparam, eparam, uparam, plot_dict, nwrms=5, nsigma=3, outfile=None):
     '''
     Plot observed and modeled time series.
     Mod by Zhao Bin, Jan. 10, 2019. Fix bug when to estimation is done.
@@ -355,6 +366,14 @@ def plot_obs_mod(nrun, erun, urun, nparam, eparam, uparam, plot_dict, nwrms=5, n
         uparam = estimated parameters for up    component
         plot_dict = {'detrend':True, 'debreak': True, 'deeqoffset': True, 'depost': True, 'deseason':True,
                      'figformat': 'jpg', 'showfig': True}
+        outfile = only meaningful when plot_dict['figformat'] == 'html':
+                  None  -> write the default '{site}.html' (legacy behaviour)
+                  False -> do not write any file; return the plotly Figure
+                  str   -> write the plotly Figure to that path
+
+    Returns:
+        plotly.graph_objects.Figure when plot_dict['figformat'] == 'html'
+        and outfile is False, otherwise None.
     '''
     if len(nrun.flag) == 0: return
 
@@ -404,6 +423,23 @@ def plot_obs_mod(nrun, erun, urun, nparam, eparam, uparam, plot_dict, nwrms=5, n
         fig.add_trace(go.Scatter(x=nt, y=nm-nmod_correct, mode='lines', line={'width': 3}, name='N'), row=1, col=1)
         fig.add_trace(go.Scatter(x=et, y=em-emod_correct, mode='lines', line={'width': 3}, name='E'), row=2, col=1)
         fig.add_trace(go.Scatter(x=ut, y=um-umod_correct, mode='lines', line={'width': 3}, name='U'), row=3, col=1)
+        # Mark the earthquake epochs modelled for this component (run.ieqlist
+        # holds the eqParam objects actually used, i.e. within distance and
+        # timespan) as dashed red vertical lines, labelled with event code.
+        def _mark_earthquakes(fig, run, row):
+            for eq in getattr(run, 'ieqlist', []):
+                if not hasattr(eq, 'decyr'):
+                    continue
+                fig.add_vline(x=eq.decyr, line_dash='dash', line_color='red',
+                              line_width=1, opacity=0.8, row=row, col=1)
+                fig.add_annotation(
+                    x=eq.decyr, y=0.98, yref='y domain', textangle=90,
+                    text='{} {:.2f}'.format(getattr(eq, 'code', 'EQ'), eq.decyr),
+                    showarrow=False, font={'size': 9, 'color': 'red'},
+                    row=row, col=1)
+        _mark_earthquakes(fig, nrun, 1)
+        _mark_earthquakes(fig, erun, 2)
+        _mark_earthquakes(fig, urun, 3)
         fig.update_xaxes(title_text='Year',row=1, col=1)
         fig.update_xaxes(title_text='Year',row=2, col=1)
         fig.update_xaxes(title_text='Year',row=3, col=1)
@@ -411,7 +447,10 @@ def plot_obs_mod(nrun, erun, urun, nparam, eparam, uparam, plot_dict, nwrms=5, n
         fig.update_yaxes(title_text='East',row=2, col=1)
         fig.update_yaxes(title_text='Up',row=3, col=1)
         fig.update_layout(autosize=True, height=1500, title='Position time series at {}'.format(nrun.site))
-        with open('{}.html'.format(nrun.site), 'w') as f:
+        if outfile is False:
+            return fig                     # UI path: hand back the figure
+        fname = outfile if outfile is not None else '{}.html'.format(nrun.site)
+        with open(fname, 'w') as f:
             f.write(fig.to_html(full_html=False, include_plotlyjs='directory'))
         if plot_dict['showfig']:
             fig.show()
@@ -427,6 +466,11 @@ def plot_obs_mod(nrun, erun, urun, nparam, eparam, uparam, plot_dict, nwrms=5, n
 
         plt.errorbar(north_t, north_d, yerr=north_e, ecolor='gray',
             elinewidth=0.2, capsize=1, capthick=0.5, fmt='o', ms=3, mfc='r', mec='black', mew=0, zorder=1)
+        if hasattr(nrun, 'good'):
+            ridx = np.where(~nrun.good)[0]
+            if ridx.size:
+                plt.plot(nrun.t[ridx], nrun.obs[ridx]-nobs_correct[ridx], 'x',
+                         color='gray', ms=6, mew=1.5, zorder=3)
         plt.plot(nt, nm-nmod_correct, color='black', zorder=2)
         plt.ylabel('North (mm)')
 
@@ -439,6 +483,11 @@ def plot_obs_mod(nrun, erun, urun, nparam, eparam, uparam, plot_dict, nwrms=5, n
 
         plt.errorbar(east_t, east_d, yerr=east_e, ecolor='gray',
             elinewidth=0.2, capsize=1, capthick=0.5, fmt='o', ms=3, mfc='g', mec='black', mew=0, zorder=1)
+        if hasattr(erun, 'good'):
+            ridx = np.where(~erun.good)[0]
+            if ridx.size:
+                plt.plot(erun.t[ridx], erun.obs[ridx]-eobs_correct[ridx], 'x',
+                         color='gray', ms=6, mew=1.5, zorder=3)
         plt.plot(et, em-emod_correct, color='black', zorder=2)
         plt.ylabel('East (mm)')
 
@@ -451,6 +500,11 @@ def plot_obs_mod(nrun, erun, urun, nparam, eparam, uparam, plot_dict, nwrms=5, n
 #           plt.title(r'vel=%.2f $\pm$ %.2f mm/yr' %(uparam[uidx], np.sqrt(np.diag(urun.cov))[1]), loc='left')
         plt.errorbar(up_t, up_d, yerr=up_e, ecolor='gray',
             elinewidth=0.2, capsize=1, capthick=0.5, fmt='o', ms=3, mfc='b', mec='black', mew=0, zorder=1)
+        if hasattr(urun, 'good'):
+            ridx = np.where(~urun.good)[0]
+            if ridx.size:
+                plt.plot(urun.t[ridx], urun.obs[ridx]-uobs_correct[ridx], 'x',
+                         color='gray', ms=6, mew=1.5, zorder=3)
         plt.plot(ut, um-umod_correct, color='black', zorder=2)
         plt.ylabel('Up (mm)')
         plt.xlabel('Time (year)')
@@ -528,6 +582,15 @@ def output_obs_mod(nrun, erun, urun, nparam, eparam, uparam, mod_dict, obs=True,
             flag[idx,1] = 2
             idx  = np.where(urun.sigma>50)[0]
             flag[idx,2] = 2
+
+            # flag = 3 marks points removed by the iterative outlier editor
+            # (getattr keeps this a no-op for runs created without fit_opts).
+            if hasattr(nrun, 'good'):
+                flag[np.where(~nrun.good)[0], 0] = 3
+            if hasattr(erun, 'good'):
+                flag[np.where(~erun.good)[0], 1] = 3
+            if hasattr(urun, 'good'):
+                flag[np.where(~urun.good)[0], 2] = 3
 
             for i in range(len(nrun.t)):
                 fid.write("{:12.5f} {:12.2f} {:12.2f} {:12.2f} {:12.2f} {:12.2f} {:12.2f} {:7d} {:7d} {:7d}\n".format(nrun.t[i],

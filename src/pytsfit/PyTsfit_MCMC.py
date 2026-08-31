@@ -6,7 +6,9 @@ Created on Sat Mar 28 19:48:51 2020
 @author: zhao
 """
 
-from pytsfit.PyTsfit import *
+from pytsfit.data import posData
+from pytsfit.models import eqcatalog, breakcatalog, eqPostList, correction
+from pytsfit.tsfitting import tsfitting
 import glob, sys, time, os
 import emcee, corner
 import numpy as np

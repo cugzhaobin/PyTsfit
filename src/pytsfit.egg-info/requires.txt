@@ -1,0 +1,12 @@
+numpy
+scipy
+matplotlib
+pandas
+pyproj
+scikit-learn
+emcee
+schwimmbad
+corner
+plotly
+pyyaml
+streamlit

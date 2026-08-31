@@ -6,11 +6,14 @@ Created on Sat Mar 28 19:48:51 2020
 @author: zhao
 """
 
-from pytsfit.PyTsfit import *
+from pytsfit.data import posData
+from pytsfit.models import eqcatalog, breakcatalog, eqPostList, correction
+from pytsfit.tsfitting import tsfitting
+from pytsfit.output import plot_obs_mod
 import glob, sys, time
 import emcee, corner, argparse
 import numpy as np
-from schwimmbad import MPIPool
+from scipy.linalg import norm
 
 
 def log_prior(theta, args):
@@ -83,11 +86,11 @@ def set_bound(flag, cor, site, component='E'):
             if cor.correct_velo == True:
                 if len(np.where(cor.velsite == site)[0]) > 0:
                     if component == 'E':
-                        ve = cor.velsite[cor.velsite==site][0,2]
-                        popt.append([ve-1.0, ve+1.0])
+                        ve = cor.veldata[cor.velsite==site][0,2]
+                        popt.append([ve-1.0, ve+2.0])
                     elif component == 'N':
-                        vn = cor.velsite[cor.velsite==site][0,3]
-                        popt.append([ve-1.0, ve+1.0])
+                        vn = cor.veldata[cor.velsite==site][0,3]
+                        popt.append([vn-1.0, vn+2.0])
                     else:
                         popt.append([-100, 100])
                 else:
@@ -115,20 +118,23 @@ def set_bound(flag, cor, site, component='E'):
 
 def main(args):
     eqfile     = './eq_rename.eq'
-    velfile    = './velomodel.vel.gmtvec'
     velfile    = ''
+    velfile    = './model.vel.gmtvec'
     offsetfile = ''
     periodfile = ''
     eq         = eqcatalog(eqfile)
     bk         = breakcatalog(eqfile)
     eqp        = eqPostList(eqfile, eq)
     cor        = correction(velfile, offsetfile, periodfile)
-    plot_dict  = {'detrend':True, 'debreak': True, 'deeqoffset': False, 'depost': False, 'deseason':False}
+    plot_dict  = {'detrend':True, 'debreak': True, 'deeqoffset': False, 'depost': False, 'deseason':False,
+                  'figformat':'jpg', 'showfig':False}
     mod_dict   = {'detrend':False, 'debreak': False, 'deeqoffset': False, 'depost': True, 'deseason':False}
     timespan   = [2011, 2025]
     nburns     = args.nburns
     nsteps     = args.nsteps
-    
+    # Optional fitting / quality-control options (see qualitycontrol.DEFAULT_FIT_OPTS).
+    fit_opts   = None
+
     param_dict = {
                   'constant'  : True,
                   'linear'    : True,
@@ -140,13 +146,13 @@ def main(args):
                   'correct'   : cor}
 
 
-    poslist = glob.glob('./2837*.pos')
+    poslist = glob.glob('./QHMD*.pos')
     for posfile in poslist:
         data = posData(posfile)
 
         # East component
         param_dict['eqlist'] = eq.eqlist
-        erun  = tsfitting(data.site, data.lon, data.lat, data.decyr, data.E, data.SE, param_dict, 'E', timespan)
+        erun  = tsfitting(data.site, data.lon, data.lat, data.decyr, data.E, data.SE, param_dict, 'E', timespan, fit_opts=fit_opts)
         flag  = erun.flag2
         ndim  = len(flag)
         nwalkers = 2*ndim
@@ -157,22 +163,25 @@ def main(args):
         for i in range(ndim):
             starting_guess[:,i] = np.random.uniform(min(popt[i]), max(popt[i]), nwalkers)
     
-        with MPIPool() as pool:
-            if not pool.is_master():
-                pool.wait()
-                sys.exit(0)
-            sampler = emcee.EnsembleSampler(nwalkers, ndim, log_posterior, pool=pool, args=[popt, erun])
-            sampler.run_mcmc(starting_guess, nsteps, progress=True)
-            chain   = sampler.get_chain()
-            np.savez('chain', chain)
-            emcee_trace = chain[nburns:,:,:].reshape(-1, ndim)
-            fig         = corner.corner(emcee_trace, show_titles=True)
-            fig.savefig("{}_{}_posterior.png".format(data.site, "E"))
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, log_posterior, args=[popt, erun])
+        sampler.run_mcmc(starting_guess, nsteps, progress=True)
+        chain   = sampler.get_chain()
+        np.savez('chain', chain)
+        e_trace = chain[nburns:,:,:].reshape(-1, ndim)
+        fig         = corner.corner(e_trace, show_titles=True)
+        fig.savefig("{}_{}_posterior.png".format(data.site, "E"))
+        eparam = np.array([corner.quantile(e_trace[:,i], [0.5])[0] for i in range(ndim)])
+        erun.param = eparam
+        erun.ifun = erun.full_filter(erun.t) 
+        cov = np.zeros((ndim, ndim))
+        for i in range(ndim):
+            cov[i,i] = norm(np.diff(corner.quantile(e_trace[:,i], [0.025, 0.5, 0.975])))
+        erun.cov = cov
 
 
         # North component
         param_dict['eqlist'] = eq.eqlist
-        nrun  = tsfitting(data.site, data.lon, data.lat, data.decyr, data.N, data.SN, param_dict, 'N', timespan)
+        nrun  = tsfitting(data.site, data.lon, data.lat, data.decyr, data.N, data.SN, param_dict, 'N', timespan, fit_opts=fit_opts)
         flag  = nrun.flag2
         ndim  = len(flag)
         nwalkers = 2*ndim
@@ -183,19 +192,54 @@ def main(args):
         for i in range(ndim):
             starting_guess[:,i] = np.random.uniform(min(popt[i]), max(popt[i]), nwalkers)
     
-        with MPIPool() as pool2:
-            if not pool2.is_master():
-                pool2.wait()
-                sys.exit(0)
-            sampler = emcee.EnsembleSampler(nwalkers, ndim, log_posterior, pool=pool2, args=[popt, nrun])
-            sampler.run_mcmc(starting_guess, nsteps, progress=True)
-            chain   = sampler.get_chain()
-            np.savez('{}_{}_chain'.format(data.site, "N"), chain)
-            emcee_trace = chain[nburns:,:,:].reshape(-1, ndim)
-            fig         = corner.corner(emcee_trace, show_titles=True)
-            fig.savefig("{}_{}_posterior.png".format(data.site, "N"))
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, log_posterior, args=[popt, nrun])
+        sampler.run_mcmc(starting_guess, nsteps, progress=True)
+        chain   = sampler.get_chain()
+        np.savez('{}_{}_chain'.format(data.site, "N"), chain)
+        n_trace = chain[nburns:,:,:].reshape(-1, ndim)
+        fig         = corner.corner(n_trace, show_titles=True)
+        fig.savefig("{}_{}_posterior.png".format(data.site, "N"))
+        nparam = np.array([corner.quantile(n_trace[:,i], [0.5])[0] for i in range(ndim)])
+        nrun.param = nparam
+        nrun.ifun = nrun.full_filter(nrun.t) 
+        cov = np.zeros((ndim, ndim))
+        for i in range(ndim):
+            cov[i,i] = norm(np.diff(corner.quantile(n_trace[:,i], [0.025, 0.5, 0.975])))
+        nrun.cov = cov
+
+
         # Up component
-#       urun  = tsfitting(data.site, data.lon, data.lat, data.decyr, data.U, data.SU, param_dict, 'U', timespan)
+        param_dict['eqlist'] = eq.eqlist
+        urun  = tsfitting(data.site, data.lon, data.lat, data.decyr, data.U, data.SU, param_dict, 'U', timespan, fit_opts=fit_opts)
+        flag  = urun.flag2
+        ndim  = len(flag)
+        nwalkers = 2*ndim
+        popt  = set_bound(flag, cor, data.site, component = 'U')
+        print(flag)
+    
+        starting_guess = np.random.random((nwalkers, ndim))
+        for i in range(ndim):
+            starting_guess[:,i] = np.random.uniform(min(popt[i]), max(popt[i]), nwalkers)
+    
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, log_posterior, args=[popt, urun])
+        sampler.run_mcmc(starting_guess, nsteps, progress=True)
+        chain   = sampler.get_chain()
+        np.savez('{}_{}_chain'.format(data.site, "U"), chain)
+        u_trace = chain[nburns:,:,:].reshape(-1, ndim)
+        fig         = corner.corner(u_trace, show_titles=True)
+        fig.savefig("{}_{}_posterior.png".format(data.site, "U"))
+        uparam = np.array([corner.quantile(u_trace[:,i], [0.5])[0] for i in range(ndim)])
+        urun.param = uparam
+        urun.ifun = urun.full_filter(urun.t) 
+        cov = np.zeros((ndim, ndim))
+        for i in range(ndim):
+            cov[i,i] = norm(np.diff(corner.quantile(u_trace[:,i], [0.025, 0.5, 0.975])))
+        urun.cov = cov
+
+        plot_obs_mod(nrun, erun, urun, nparam, eparam, uparam, plot_dict)
+
+
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Fit time series using MCMC method")

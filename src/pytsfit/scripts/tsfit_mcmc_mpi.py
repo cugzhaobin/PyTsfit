@@ -6,11 +6,16 @@ Created on Sat Mar 28 19:48:51 2020
 @author: zhao
 """
 
-from pytsfit.PyTsfit import *
+from pytsfit.data import posData
+from pytsfit.models import eqcatalog, breakcatalog, eqPostList, correction
+from pytsfit.tsfitting import tsfitting
 import glob, sys, time
 import emcee, corner, argparse
 import numpy as np
-from schwimmbad import MPIPool
+try:
+    from schwimmbad import MPIPool
+except ImportError:
+    MPIPool = None
 
 
 def log_prior(theta, args):
@@ -86,7 +91,8 @@ def main(args):
     timespan   = [2011, 2025]
     nburns     = args.nburns
     nsteps     = args.nsteps
-    
+    # Optional fitting / quality-control options (see qualitycontrol.DEFAULT_FIT_OPTS).
+    fit_opts   = None
 
 
     param_dict = {
@@ -107,8 +113,8 @@ def main(args):
         # North
         param_dict['eqlist']     = eq.eqlist
 #       param_dict['eqpostlist'] = eqp.eqpostlist
-        nrun  = tsfitting(data.site, data.lon, data.lat, data.decyr, data.E, data.SE, param_dict, 'N', 
-                  timespan)
+        nrun  = tsfitting(data.site, data.lon, data.lat, data.decyr, data.N, data.SN, param_dict, 'N',
+                  timespan, fit_opts=fit_opts)
 
         flag     = nrun.flag2
         ndim     = len(flag)
@@ -144,6 +150,8 @@ def main(args):
         for i in range(ndim):
             starting_guess[:,i] = np.random.uniform(min(popt[i]), max(popt[i]), nwalkers)
     
+        if MPIPool is None:
+            raise ImportError('schwimmbad is required for MPI-parallel MCMC (pip install schwimmbad)')
         with MPIPool() as pool:
             if not pool.is_master():
                 pool.wait()

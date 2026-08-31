@@ -1,0 +1,3 @@
+[console_scripts]
+do_pytsfit = pytsfit.scripts.do_pytsfit:main
+pytsfit-web = pytsfit.ui.launch:main
