@@ -2,6 +2,15 @@
 # ----------------------------------------------------------
 # Output and plotting functions (output_* / plot_obs_mod).
 #
+# Note on the postseismic deformation time range:
+#   output_postseismic_disp computes the postseismic displacement over the
+#   caller-supplied time_span = [t0, t1] (decimal years). Only the
+#   postseismic (EQDECAY) terms are kept, and the reported displacement is
+#   model(t1) - model(t0), i.e. the deformation accumulated in this range.
+#   Set t0 to the earthquake origin time to obtain the full postseismic
+#   deformation since the earthquake. In the workflow, time_span comes from
+#   dict_output.eqpost_tspan in config.yaml (e.g. [2020.557, 2026.500]).
+#
 # Extracted from PyTsfit.py during the module split. No behaviour change.
 # ----------------------------------------------------------
 import os, logging
@@ -102,6 +111,58 @@ def output_postseismic_velo(nrun, erun, urun, time_span, fid=None):
                     %(nrun.lon, nrun.lat, e_p[0], n_p[0], erun.wrms/2.0, nrun.wrms/2.0, 0.0, nrun.site))
 
 
+def _check_postseismic_support(run, time_span):
+    '''
+    Warn when a postseismic displacement cannot be inferred reliably.
+
+    Two conditions make model(t1) - model(t0) meaningless even though the fit
+    itself looks good:
+
+      1. The requested window extends outside the observed time series, so the
+         reported value is a model extrapolation rather than data.
+      2. A postseismic event occurred earlier than the first observation by
+         more than its maximum decay time (``tau``). The decay is then never
+         sampled: the amplitude and tau are degenerate with the constant and
+         velocity terms, and the fit can return arbitrary values (routinely
+         sign-flipped or many times larger than the real signal). This is
+         common for events that predate a station's first epoch, and it is
+         worst in the vertical because that component has the most scatter.
+
+    These are warnings only; the caller still receives model(t1) - model(t0).
+    '''
+    tmin = float(np.min(run.t))
+    tmax = float(np.max(run.t))
+
+    if time_span[0] < tmin or time_span[1] > tmax:
+        logging.warning(
+            "%s: postseismic window [%.3f, %.3f] is not covered by the data "
+            "[%.3f, %.3f]; the reported displacement is extrapolated.",
+            run.site, time_span[0], time_span[1], tmin, tmax)
+
+    unsupported = []
+    for eqpost in getattr(run, 'ieqpostlist', []):
+        gap = (tmin - eqpost.eq.decyr) * 365.25
+        if gap <= 0:
+            continue
+        try:
+            maxtau = float(eqpost.maxtau)
+        except (TypeError, ValueError):
+            maxtau = None
+        if maxtau is None or gap > maxtau:
+            unsupported.append("{} ({:.0f} d before first obs, tau_max={} d)".format(
+                eqpost.eq.code, gap,
+                '?' if maxtau is None else '{:.0f}'.format(maxtau)))
+
+    if unsupported:
+        logging.warning(
+            "%s: postseismic term(s) %s cannot be constrained by this time "
+            "series; their amplitude and tau are degenerate with the "
+            "constant and velocity, so the reported displacement may be "
+            "arbitrary. Pass eqcode to select one event, or remove those "
+            "events from the eq file.",
+            run.site, ", ".join(unsupported))
+
+
 def output_postseismic_disp(nrun, erun, urun, time_span, fid=None, eqcode=None):
     '''
     Oput postseismic displacement during time_span
@@ -114,7 +175,12 @@ def output_postseismic_disp(nrun, erun, urun, time_span, fid=None, eqcode=None):
         nrun   = an instance of class tsfitting for north component
         erun   = an instance of class tsfitting for east component
         urun   = an instance of class tsfitting for up component
-        time_span = time range for postseismic calculation
+        time_span = [t0, t1] postseismic time range in decimal years. Only the
+                    postseismic (EQDECAY) model is used, and the reported
+                    displacement is model(t1) - model(t0), i.e. the
+                    deformation accumulated over [t0, t1]. Set t0 to the
+                    earthquake origin time for the full postseismic
+                    deformation since the earthquake.
         fid    = file ID
         eqcode = earthquake code, only postseismic displacement associated with this EQ will be output
     '''
@@ -125,6 +191,14 @@ def output_postseismic_disp(nrun, erun, urun, time_span, fid=None, eqcode=None):
     # define mod_dict
     mod_dict   = {'detrend':False, 'debreak': False, 'deeqoffset': False, 'depost': True, 'deseason':False}
 
+    # Warn about extrapolation and about events that the data cannot constrain.
+    _check_postseismic_support(nrun, time_span)
+
+    # Keep each component independent: a missing overlap for one component
+    # must not leave the others undefined (or silently reuse another index).
+    ndisp, edisp, udisp = np.nan, np.nan, np.nan
+    nok = eok = uok = False
+
     # north component
     nt, nm = nrun.get_mod()
     idx    = np.where(np.logical_and(nt>time_span[0], nt<time_span[1]))[0]
@@ -134,6 +208,7 @@ def output_postseismic_disp(nrun, erun, urun, time_span, fid=None, eqcode=None):
             logging.warning("No correction model for {0:s}".format(nrun.site))
             return
         ndisp = nmod_correct[-1]-nmod_correct[0]
+        nok = True
 
     # east component
     et, em = erun.get_mod()
@@ -144,6 +219,7 @@ def output_postseismic_disp(nrun, erun, urun, time_span, fid=None, eqcode=None):
             logging.warning("No correction model for {0:s}".format(erun.site))
             return
         edisp = emod_correct[-1]-emod_correct[0]
+        eok = True
 
     # vertical component
     ut, um = urun.get_mod()
@@ -154,16 +230,23 @@ def output_postseismic_disp(nrun, erun, urun, time_span, fid=None, eqcode=None):
             logging.warning("No correction model for {0:s}".format(urun.site))
             return
         udisp = umod_correct[-1]-umod_correct[0]
+        uok = True
 
     # print the results
-    if len(idx) > 0:
+    if nok and eok and uok:
         if fid is None:
-            print("%s %10.3f %10.3f %10.3f %10.3f %10.3f %10.3f %10.3f %s\n"
-                %(" VEL ", nrun.lon, nrun.lat, edisp, ndisp, 0.0, 0.0, 0.0, nrun.site))
+            print("%s %10.3f %10.3f %10.3f %10.3f %10.3f %10.3f %10.3f %s %10.3f %10.3f\n"
+                %(" VEL ", nrun.lon, nrun.lat, edisp, ndisp, erun.wrms, nrun.wrms,
+                  0.0, nrun.site, udisp, urun.wrms))
         else:
             fid.write(" %10.3f %10.3f %10.3f %10.3f %10.3f %10.3f %10.3f %s %10.3f %10.3f\n" \
                     %(nrun.lon, nrun.lat, edisp, ndisp, erun.wrms, nrun.wrms, 0.0, nrun.site,\
                       udisp, urun.wrms))
+    else:
+        logging.warning(
+            "%s: postseismic displacement skipped; time_span does not overlap "
+            "all three components (N=%s, E=%s, U=%s).",
+            nrun.site, nok, eok, uok)
 
 def output_eqoffset(nrun, erun, urun, fid=None, fmt='GMT2D'):
     '''

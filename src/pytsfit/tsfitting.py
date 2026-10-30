@@ -134,6 +134,23 @@ class tsfitting:
             xy     = gt.llh2localxy([lat, lon], origin)
             dist   = np.sqrt(xy[0]**2 + xy[1]**2)
             if dist < eqpost.eq.distance and eqpost.eq.decyr < maxt:
+                # An event that occurred well before the first observation has
+                # no sampled decay: its amplitude and tau are degenerate with
+                # CONSTANT/VELOCITY, so the fit returns arbitrary values (often
+                # with formal errors of hundreds of mm). Skip it rather than
+                # estimate an unconstrained term.
+                try:
+                    maxtau = float(eqpost.maxtau)
+                except (TypeError, ValueError):
+                    maxtau = None
+                gap_days = (mint - eqpost.eq.decyr) * 365.25
+                if maxtau is not None and gap_days > maxtau:
+                    logging.warning(
+                        '%s: skipping postseismic term for %s: first observation '
+                        'is %.0f d after the event, beyond tau_max=%.0f d, so '
+                        'amplitude and tau cannot be constrained.',
+                        site, eqpost.eq.code, gap_days, maxtau)
+                    continue
                 self.ieqpostlist.append(eqpost)
                 self.nparam = self.nparam + 2
                 self.flag.append("EQDECAY")

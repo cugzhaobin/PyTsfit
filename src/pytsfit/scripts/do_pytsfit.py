@@ -188,6 +188,10 @@ def main():
         fid_post_disp = open(dict_output['eqpostdisp'], 'a')
         write_header_if_empty(fid_post_disp, dict_output['eqpostdisp'], HEADER_POSTDISP)
 
+    # Optional 2-char earthquake code (eq_rename.eq) selecting the event whose
+    # postseismic displacement is reported. Empty means "sum all EQDECAY terms".
+    eqpost_eqcode = dict_output.get('eqpost_eqcode', '') or None
+
     for i in range(len(sitelist)):
         print(60*'-')
         posfiles = glob.glob('{}/{}*.{}'.format(tsdir, sitelist[i], tsformat))
@@ -235,10 +239,12 @@ def main():
                 output_break(nrun, erun, urun, fid=fid_brk)
             if len(dict_output['eqpostdisp']) > 0:
                 if len(dict_output['eqpost_tspan']) != 0:
-                    output_postseismic_disp(nrun, erun, urun, dict_output['eqpost_tspan'], fid=fid_post_disp)
+                    output_postseismic_disp(nrun, erun, urun, dict_output['eqpost_tspan'],
+                                            fid=fid_post_disp, eqcode=eqpost_eqcode)
             if dict_output['eqpostts'] == True:
                 if len(dict_output['eqpost_tspan']) != 0:
-                    output_postseismic_ts(nrun, erun, urun, dict_output['eqpost_tspan'])
+                    output_postseismic_ts(nrun, erun, urun, dict_output['eqpost_tspan'],
+                                          eqcode=eqpost_eqcode)
     if fid_velo      != None: fid_velo.close()
     if fid_eq        != None: fid_eq.close()
     if fid_brk       != None: fid_brk.close()

@@ -133,7 +133,8 @@ dict_output:             # what to write and where
     eqoffset    : ''          # coseismic offset output file
     break       : ''          # break output file
     eqpostdisp  : ''          # postseismic displacement output file
-    eqpost_tspan: [2015, 2023]
+    eqpost_tspan: [2015, 2023]  # window for the reported displacement
+    eqpost_eqcode: ''         # optional 2-char event code; '' = sum all events
 ```
 
 ### Fit options (`dict_fit`)
