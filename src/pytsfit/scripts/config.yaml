@@ -43,5 +43,14 @@ dict_output:
     velfile     : ''
     eqoffset    : ''
     break       : ''
-    eqpostdisp  : ''
-    eqpost_tspan: [2015, 2023]
+    # Cumulative-displacement windows. `eqpostdsp_tspan` may be one [t0, t1]
+    # pair or a list of pairs; entries are paired positionally with
+    # `eqpostdisp`. The older key `eqpost_tspan` is still accepted as an
+    # alias when `eqpostdsp_tspan` is absent.
+    eqpostdisp     : ''          # e.g. ['postseismic1.gmtvec', 'postseismic2.gmtvec']
+    eqpostdsp_tspan: [2015, 2023]  # e.g. [[2015, 2020], [2020, 2023]]
+    # Postseismic time-series window ({site}_pos.neu), independent of the
+    # displacement windows above. It is the zero epoch of YEAR_SINCE_EQ and
+    # is usually the earthquake origin time. Falls back to the displacement
+    # window when not set.
+    eqpostts_tspan : [2015, 2023]

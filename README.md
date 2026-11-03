@@ -132,10 +132,26 @@ dict_output:             # what to write and where
     velfile     : ''          # velocity output file
     eqoffset    : ''          # coseismic offset output file
     break       : ''          # break output file
-    eqpostdisp  : ''          # postseismic displacement output file
-    eqpost_tspan: [2015, 2023]  # window for the reported displacement
-    eqpost_eqcode: ''         # optional 2-char event code; '' = sum all events
+    eqpostdisp     : ''       # postseismic displacement output file(s)
+    eqpostdsp_tspan: [2015, 2023]  # window(s) for the reported displacement
+    eqpostts_tspan : [2015, 2023]  # window for the {site}_pos.neu series
+    eqpost_eqcode  : ''       # optional 2-char event code; '' = sum all events
 ```
+
+`eqpostdisp` and `eqpostdsp_tspan` may be lists paired by position, in which
+case each window is written to its own file:
+
+```yaml
+    eqpostdisp     : ['postseismic1.gmtvec', 'postseismic2.gmtvec']
+    eqpostdsp_tspan: [[2020.557, 2021.572], [2021.573, 2026.500]]
+```
+
+`eqpostts_tspan` controls the separate postseismic time-series output
+(`{site}_pos.neu`); it is independent of the cumulative-displacement windows.
+When it is not set, it falls back to the displacement window if there is only
+one, or to the full extent `[min(t0), max(t1)]` of several windows.
+`eqpost_tspan` is still accepted as an older alias for `eqpostdsp_tspan`.
+The single-file / single-window form shown above remains valid.
 
 ### Fit options (`dict_fit`)
 
@@ -193,7 +209,15 @@ so they can be consumed directly by GMT or `np.genfromtxt`:
 - **coseismic offsets** — Lon, Lat, E/N/U offsets and uncertainties, EQ code.
 - **breaks** — non-earthquake break offsets.
 - **postseismic displacement** — E/N/U displacement and WRMS over
-  `eqpost_tspan`.
+  `eqpostdsp_tspan`. When `eqpostdisp` / `eqpostdsp_tspan` are lists, one file
+  is written per window. Each file's header records the window as
+  `displacement window: tstart(yr)`, `tend(yr)` and `tspan(yr)`; appending to
+  an existing file whose recorded window differs raises an error instead of
+  mixing periods.
+- **postseismic time series** — `{site}_pos.neu` (or `{site}_{eqcode}.neu`)
+  over `eqpostts_tspan`. Its header records a distinct
+  `time-series window: tstart(yr)` / `tend(yr)` / `tspan(yr)` line, and its
+  `YEAR_SINCE_EQ` column is relative to `tstart`.
 
 ## MCMC scripts
 

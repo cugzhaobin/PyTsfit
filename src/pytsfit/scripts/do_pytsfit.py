@@ -6,13 +6,16 @@ from pytsfit.models import build_param_dict
 from pytsfit.tsfitting import tsfitting
 from pytsfit.output import (plot_obs_mod, output_param, output_obs_mod,
                             output_velo, output_eqoffset, output_break,
-                            output_postseismic_disp, output_postseismic_ts)
+                            output_postseismic_disp, output_postseismic_ts,
+                            pair_postseismic_outputs, open_postdisp_file,
+                            resolve_displacement_spans,
+                            resolve_postseismic_ts_span)
 
 # Header lines describing the columns of each output file. These are written
-# as '#' comment lines so they are ignored by GMT and np.genfromtxt.
+# as '#' comment lines so they are ignored by GMT and np.genfromtxt. The
+# postseismic displacement header is built per window by output.postdisp_header().
 HEADER_VELO      = '# Lon(deg)  Lat(deg)  Ve(mm/yr)  Vn(mm/yr)  Ve(mm/yr)  Vn(mm/yr)  Se(mm/yr)  Sn(mm/yr)  Corr  Vu(mm/yr)  Vu(mm/yr)  Su(mm/yr)  Site  #  tstart(yr)  tend(yr)  tspan(yr)  nobs\n'
 HEADER_EQOFFSET  = '# Lon(deg)  Lat(deg)  E_off(mm)  N_off(mm)  U_off(mm)  Se(mm)  Sn(mm)  Su(mm)  Site  #  EQ_code\n'
-HEADER_POSTDISP  = '# Lon(deg)  Lat(deg)  E_disp(mm)  N_disp(mm)  E_wrms(mm)  N_wrms(mm)  Corr  Site  U_disp(mm)  U_wrms(mm)\n'
 
 def write_header_if_empty(fid, fname, header):
     '''
@@ -25,7 +28,7 @@ def write_header_if_empty(fid, fname, header):
 
 # YAML keys exposed as command-line overrides, grouped by value type. Each
 # entry is ``(key, section)``; the CLI flag is ``--<key>`` with underscores
-# turned into dashes (e.g. ``eqpost_tspan`` -> ``--eqpost-tspan``), and its
+# turned into dashes (e.g. ``eqpostdsp_tspan`` -> ``--eqpostdsp-tspan``), and its
 # ``dest`` is ``key`` so it can be read back with ``getattr(args, key)``.
 _BOOL_KEYS = [
     ('annual',     'dict_param'),
@@ -47,15 +50,32 @@ _STR_KEYS = [
     ('velfile',         'dict_output'),
     ('eqoffset',        'dict_output'),
     ('break',           'dict_output'),
-    ('eqpostdisp',      'dict_output'),
     ('sigma_scale',     'dict_fit'),
     ('outlier_scale',   'dict_fit'),
 ]
 
-_LIST_KEYS = [
-    ('timespan',     'dict_input'),
-    ('eqpost_tspan', 'dict_output'),
+# Keys that accept one or more values. `eqpostdisp` pairs with
+# `eqpostdsp_tspan` positionally, so both support multiple values on the
+# command line.
+_MULTI_STR_KEYS = [
+    ('eqpostdisp', 'dict_output'),
 ]
+
+_LIST_KEYS = [
+    ('timespan',      'dict_input'),
+    ('eqpostts_tspan', 'dict_output'),
+]
+
+_MULTI_LIST_KEYS = [
+    ('eqpostdsp_tspan', 'dict_output'),
+]
+
+# Additional command-line spellings kept for backward compatibility. The
+# canonical option is built from the key; these aliases point at the same
+# destination so an older command line keeps working.
+_OPTION_ALIASES = {
+    'eqpostdsp_tspan': ['--eqpost-tspan'],
+}
 
 # Numeric fit options exposed as command-line overrides. Kept separate from the
 # string keys because their values must be parsed as floats/ints, not left as
@@ -91,9 +111,19 @@ def build_parser():
     for key, section in _STR_KEYS:
         parser.add_argument('--' + key.replace('_', '-'), type=str,
                             help='Override {}.{}.'.format(section, key))
+    for key, section in _MULTI_STR_KEYS:
+        parser.add_argument('--' + key.replace('_', '-'), type=str, nargs='+',
+                            help='Override {}.{} (one or more values).'
+                                 .format(section, key))
     for key, section in _LIST_KEYS:
         parser.add_argument('--' + key.replace('_', '-'), type=float, nargs=2,
                             help='Override {}.{} (two values).'.format(section, key))
+    for key, section in _MULTI_LIST_KEYS:
+        option = '--' + key.replace('_', '-')
+        aliases = [option] + _OPTION_ALIASES.get(key, [])
+        parser.add_argument(*aliases, dest=key, type=float, nargs='+',
+                            help='Override {}.{} (t0 t1 [t0 t1 ...]).'
+                                 .format(section, key))
     for key, section in _FLOAT_KEYS:
         parser.add_argument('--' + key.replace('_', '-'), type=float,
                             help='Override {}.{}.'.format(section, key))
@@ -118,10 +148,27 @@ def apply_cli_overrides(args, cfg):
         value = getattr(args, key)
         if value is not None:
             cfg[section][key] = value
+    for key, section in _MULTI_STR_KEYS:
+        value = getattr(args, key)
+        if value is not None:
+            cfg[section][key] = list(value)
     for key, section in _LIST_KEYS:
         value = getattr(args, key)
         if value is not None:
             cfg[section][key] = list(value)
+    for key, section in _MULTI_LIST_KEYS:
+        value = getattr(args, key)
+        if value is not None:
+            if len(value) % 2 != 0:
+                raise SystemExit(
+                    '--{} expects an even number of values: '
+                    't0 t1 [t0 t1 ...]'.format(key.replace('_', '-')))
+            if len(value) == 2:
+                # Keep the historical flat [t0, t1] form for one window.
+                cfg[section][key] = [float(v) for v in value]
+            else:
+                cfg[section][key] = [[float(v) for v in value[i:i + 2]]
+                                     for i in range(0, len(value), 2)]
     for key, section in _FLOAT_KEYS:
         value = getattr(args, key)
         if value is not None:
@@ -175,7 +222,6 @@ def main():
     fid_velo      = None
     fid_eq        = None
     fid_brk       = None
-    fid_post_disp = None
     if len(dict_output['velfile'])>0:
         fid_velo = open(dict_output['velfile'], 'a')
         write_header_if_empty(fid_velo, dict_output['velfile'], HEADER_VELO)
@@ -184,9 +230,30 @@ def main():
         write_header_if_empty(fid_eq, dict_output['eqoffset'], HEADER_EQOFFSET)
     if len(dict_output['break'])>0:
         fid_brk  = open(dict_output['break'], 'a')
-    if len(dict_output['eqpostdisp']) > 0:
-        fid_post_disp = open(dict_output['eqpostdisp'], 'a')
-        write_header_if_empty(fid_post_disp, dict_output['eqpostdisp'], HEADER_POSTDISP)
+
+    # Pair each postseismic output file with its own integration window, so
+    # several cumulative-displacement periods can be written side by side.
+    # `eqpostdsp_tspan` is the current key; `eqpost_tspan` is accepted as an
+    # older alias for the same setting.
+    dsp_spans = resolve_displacement_spans(
+        dict_output.get('eqpostdsp_tspan', []),
+        dict_output.get('eqpost_tspan', []))
+    postdisp_outputs = pair_postseismic_outputs(
+        dict_output.get('eqpostdisp', ''), dsp_spans)
+    fids_post_disp = [open_postdisp_file(fname, time_span)
+                      for fname, time_span in postdisp_outputs]
+
+    # The postseismic time-series output has its own window, independent of
+    # the cumulative-displacement integration windows. Resolve it only when
+    # that output is enabled, so a disabled output cannot warn or fail.
+    postts_span = []
+    if dict_output.get('eqpostts', False):
+        postts_span = resolve_postseismic_ts_span(
+            dict_output.get('eqpostts_tspan', []), dsp_spans)
+        if not postts_span:
+            logging.warning('eqpostts is enabled but no postseismic '
+                            'time-series window is configured; skipping that '
+                            'output.')
 
     # Optional 2-char earthquake code (eq_rename.eq) selecting the event whose
     # postseismic displacement is reported. Empty means "sum all EQDECAY terms".
@@ -237,18 +304,17 @@ def main():
                 output_eqoffset(nrun, erun, urun, fid=fid_eq, fmt='GMT3D')
             if len(dict_output['break']) > 0:
                 output_break(nrun, erun, urun, fid=fid_brk)
-            if len(dict_output['eqpostdisp']) > 0:
-                if len(dict_output['eqpost_tspan']) != 0:
-                    output_postseismic_disp(nrun, erun, urun, dict_output['eqpost_tspan'],
-                                            fid=fid_post_disp, eqcode=eqpost_eqcode)
-            if dict_output['eqpostts'] == True:
-                if len(dict_output['eqpost_tspan']) != 0:
-                    output_postseismic_ts(nrun, erun, urun, dict_output['eqpost_tspan'],
-                                          eqcode=eqpost_eqcode)
+            for fid_post_disp, (_, post_tspan) in zip(fids_post_disp, postdisp_outputs):
+                output_postseismic_disp(nrun, erun, urun, post_tspan,
+                                        fid=fid_post_disp, eqcode=eqpost_eqcode)
+            if dict_output['eqpostts'] == True and len(postts_span) != 0:
+                output_postseismic_ts(nrun, erun, urun, postts_span,
+                                      eqcode=eqpost_eqcode)
     if fid_velo      != None: fid_velo.close()
     if fid_eq        != None: fid_eq.close()
     if fid_brk       != None: fid_brk.close()
-    if fid_post_disp != None: fid_post_disp.close()
+    for fid_post_disp in fids_post_disp:
+        fid_post_disp.close()
 
 if __name__ == '__main__':
     main()

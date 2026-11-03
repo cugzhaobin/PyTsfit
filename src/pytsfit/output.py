@@ -9,13 +9,247 @@
 #   model(t1) - model(t0), i.e. the deformation accumulated in this range.
 #   Set t0 to the earthquake origin time to obtain the full postseismic
 #   deformation since the earthquake. In the workflow, time_span comes from
-#   dict_output.eqpost_tspan in config.yaml (e.g. [2020.557, 2026.500]).
+#   dict_output.eqpostdsp_tspan in config.yaml (e.g. [2020.557, 2026.500]).
+#   The postseismic time-series output uses the separate
+#   dict_output.eqpostts_tspan window.
 #
 # Extracted from PyTsfit.py during the module split. No behaviour change.
 # ----------------------------------------------------------
-import os, logging
+import os, re, logging
 import numpy as np
 import matplotlib.pyplot as plt
+
+# Column header for cumulative postseismic displacement files (gmtvec). The
+# integration window is written by postdisp_header() as a separate comment
+# line, because it applies to every row rather than being a per-row column.
+HEADER_POSTDISP = '# Lon(deg)  Lat(deg)  E_disp(mm)  N_disp(mm)  E_wrms(mm)  N_wrms(mm)  Corr  Site  U_disp(mm)  U_wrms(mm)\n'
+
+# Matches the tstart(yr)/tend(yr) pair written by postdisp_header().
+_POSTDISP_HEADER_RE = re.compile(
+    r'tstart\(yr\)\s*=\s*([-+0-9.eE]+).*?tend\(yr\)\s*=\s*([-+0-9.eE]+)')
+
+
+def postdisp_header(time_span):
+    '''
+    Return the comment header for a cumulative postseismic displacement file.
+
+    The first line describes what the reported values mean, the second records
+    the integration window in decimal years (machine-readable through the
+    ``tstart(yr)`` / ``tend(yr)`` keys), and the third lists the columns. All
+    lines start with '#', so GMT and np.genfromtxt skip them.
+    '''
+    t0, t1 = float(time_span[0]), float(time_span[1])
+    return ("# Postseismic cumulative displacement (model(tend) - model(tstart))\n"
+            "# displacement window: tstart(yr) = {:.3f}  tend(yr) = {:.3f}"
+            "  tspan(yr) = {:.3f}\n"
+            "{}".format(t0, t1, t1 - t0, HEADER_POSTDISP))
+
+
+def _as_filenames(value):
+    '''Normalize an eqpostdisp value (str / list / ndarray) to a list.'''
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = value.strip()
+        return [value] if value else []
+    if isinstance(value, np.ndarray):
+        value = value.tolist()
+    if isinstance(value, (list, tuple)):
+        return [str(v).strip() for v in value if str(v).strip()]
+    raise TypeError('eqpostdisp must be a file name or a list of file names, '
+                    'got {!r}'.format(value))
+
+
+def _is_number(value):
+    return np.isscalar(value) and not isinstance(value, (str, bytes))
+
+
+def normalize_postseismic_spans(tspan):
+    '''
+    Normalize ``[t0, t1]`` or ``[[t0, t1], [t0, t1], ...]`` to a list of
+    ``[float, float]`` windows, validating each one.
+    '''
+    if tspan is None:
+        return []
+    if isinstance(tspan, str):
+        if not tspan.strip():
+            return []
+        raise TypeError('postseismic window must be [t0, t1] or a list of '
+                        'such pairs, got {!r}'.format(tspan))
+    if isinstance(tspan, np.ndarray):
+        tspan = tspan.tolist()
+    if not isinstance(tspan, (list, tuple)):
+        raise TypeError('postseismic window must be [t0, t1] or a list of '
+                        'such pairs, got {!r}'.format(tspan))
+    if len(tspan) == 0:
+        return []
+
+    # Old form: a single flat pair [t0, t1].
+    if len(tspan) == 2 and all(_is_number(v) for v in tspan):
+        spans = [list(tspan)]
+    else:
+        spans = list(tspan)
+
+    normalized = []
+    for i, span in enumerate(spans):
+        if isinstance(span, np.ndarray):
+            span = span.tolist()
+        if not isinstance(span, (list, tuple)) or len(span) != 2:
+            raise ValueError(
+                'window[{}] must be a [t0, t1] pair, got {!r}'
+                .format(i, span))
+        try:
+            t0, t1 = float(span[0]), float(span[1])
+        except (TypeError, ValueError):
+            raise ValueError(
+                'window[{}] must contain two numbers, got {!r}'
+                .format(i, span))
+        if not (np.isfinite(t0) and np.isfinite(t1)):
+            raise ValueError(
+                'window[{}] must be finite, got [{}, {}]'
+                .format(i, t0, t1))
+        if t0 >= t1:
+            raise ValueError(
+                'window[{}] = [{}, {}] must have t0 < t1'
+                .format(i, t0, t1))
+        normalized.append([t0, t1])
+    return normalized
+
+
+def pair_postseismic_outputs(eqpostdisp, eqpostdsp_tspan):
+    '''
+    Pair postseismic output file names with their integration windows.
+
+    ``eqpostdisp`` and ``eqpostdsp_tspan`` may each use the old single-value
+    form (``'postseismic.gmtvec'`` / ``[t0, t1]``) or the new list form
+    (``['post1.gmtvec', 'post2.gmtvec']`` /
+    ``[[t0, t1], [t2, t3]]``). Entries are paired positionally.
+
+    Returns a list of ``(filename, [t0, t1])`` pairs. An empty file name or an
+    empty window list disables the output and returns ``[]``. Length
+    mismatches, malformed windows and duplicate file names with different
+    windows raise ``ValueError`` so a misconfiguration cannot silently mix
+    results from different time windows.
+    '''
+    names = _as_filenames(eqpostdisp)
+    spans = normalize_postseismic_spans(eqpostdsp_tspan)
+    if not names:
+        return []
+    if not spans:
+        logging.warning('eqpostdisp is set but eqpostdsp_tspan is empty; '
+                        'no postseismic displacement will be written.')
+        return []
+    if len(names) != len(spans):
+        raise ValueError(
+            'eqpostdisp has {} file name(s) but eqpostdsp_tspan has {} '
+            'window(s); they must be paired one-to-one.'
+            .format(len(names), len(spans)))
+
+    seen = {}
+    pairs = []
+    for name, span in zip(names, spans):
+        key = os.path.abspath(name)
+        if key in seen and seen[key] != span:
+            raise ValueError(
+                'eqpostdisp file {!r} is used for both window {} and {}; '
+                'use a different file for each window.'
+                .format(name, seen[key], span))
+        seen[key] = span
+        pairs.append((name, span))
+    return pairs
+
+
+def resolve_displacement_spans(eqpostdsp_tspan=None, eqpost_tspan=None):
+    '''
+    Return the cumulative-displacement integration windows as a list of
+    ``[t0, t1]`` pairs.
+
+    ``eqpostdsp_tspan`` is the current key. ``eqpost_tspan`` is the older name
+    for the same setting and is still accepted for backward compatibility; it
+    is used only when ``eqpostdsp_tspan`` is empty. When both are set to
+    different values, ``eqpostdsp_tspan`` wins and a warning is logged.
+    '''
+    spans = normalize_postseismic_spans(eqpostdsp_tspan)
+    legacy = normalize_postseismic_spans(eqpost_tspan)
+    if spans:
+        if legacy and legacy != spans:
+            logging.warning(
+                'both eqpostdsp_tspan and the legacy eqpost_tspan are set to '
+                'different values; using eqpostdsp_tspan %s.', spans)
+        return spans
+    return legacy
+
+
+def resolve_postseismic_ts_span(eqpostts_tspan=None, eqpostdsp_tspan=None,
+                                eqpost_tspan=None):
+    '''
+    Return the ``[t0, t1]`` window used for the postseismic time-series output
+    (``{site}_pos.neu``), or ``[]`` when this output is disabled.
+
+    ``eqpostts_tspan`` is the explicit setting and must be a single window. If
+    it is not given, fall back to the cumulative-displacement window(s): a
+    single window is used as-is (the historical behaviour); several windows
+    are merged into their full extent ``[min(t0), max(t1)]`` with a warning,
+    because one time-series file cannot represent several disjoint windows.
+    '''
+    spans = normalize_postseismic_spans(eqpostts_tspan)
+    if spans:
+        if len(spans) != 1:
+            raise ValueError(
+                'eqpostts_tspan must be a single [t0, t1] window, got {}'
+                .format(spans))
+        return spans[0]
+
+    spans = resolve_displacement_spans(eqpostdsp_tspan, eqpost_tspan)
+    if not spans:
+        return []
+    if len(spans) == 1:
+        return spans[0]
+
+    t0 = min(span[0] for span in spans)
+    t1 = max(span[1] for span in spans)
+    logging.warning(
+        'eqpostts_tspan is not set; using the full extent [%.3f, %.3f] of '
+        'the cumulative-displacement window(s) for the postseismic time '
+        'series output. Set eqpostts_tspan explicitly to choose another '
+        'range.', t0, t1)
+    return [t0, t1]
+
+
+def open_postdisp_file(fname, time_span):
+    '''
+    Open a cumulative postseismic displacement file for appending.
+
+    A new (empty) file receives the window header from postdisp_header(). An
+    existing file must already carry the same ``tstart(yr)`` / ``tend(yr)``
+    window; otherwise ``ValueError`` is raised instead of appending rows from
+    two different time windows to the same file.
+    '''
+    fid = open(fname, 'a+')
+    if os.path.getsize(fname) == 0:
+        fid.write(postdisp_header(time_span))
+    else:
+        fid.seek(0)
+        existing = fid.readline() + fid.readline()
+        match = _POSTDISP_HEADER_RE.search(existing)
+        if match is None:
+            fid.close()
+            raise ValueError(
+                '{!r} already exists but has no tstart(yr)/tend(yr) header; '
+                'remove it or choose a new eqpostdisp file name.'
+                .format(fname))
+        old = [float(match.group(1)), float(match.group(2))]
+        new = [float(time_span[0]), float(time_span[1])]
+        # The header stores three decimals, so compare at that precision.
+        if not np.allclose(old, new, rtol=0.0, atol=1e-3):
+            fid.close()
+            raise ValueError(
+                '{!r} already contains the window [{:.3f}, {:.3f}], but '
+                'eqpostdsp_tspan requests [{:.3f}, {:.3f}]; use a different '
+                'file name or remove the existing file.'
+                .format(fname, old[0], old[1], new[0], new[1]))
+    fid.seek(0, os.SEEK_END)
+    return fid
 
 def output_velo(nrun, erun, urun, fid=None, fmt='GMT'):
     '''
@@ -342,7 +576,11 @@ def output_postseismic_ts(nrun, erun, urun, time_span, otype='obs', eqcode=None)
         outfile = f'{nrun.site}_{eqcode}.neu'
     else:
         outfile = f'{nrun.site}_pos.neu'
+    t0, t1 = float(time_span[0]), float(time_span[1])
     with open(outfile, 'w') as fid:
+        fid.write('# Postseismic time series (YEAR_SINCE_EQ = year - tstart)\n')
+        fid.write('# time-series window: tstart(yr) = {:.3f}  tend(yr) = {:.3f}'
+                  '  tspan(yr) = {:.3f}\n'.format(t0, t1, t1 - t0))
         fid.write('# YEAR_SINCE_EQ  NORTH(m)  EAST(m) Up(m)  Nsigma(m)  Esigma(m)  Usigma(m)\n')
         if otype == 'mod':
             pass

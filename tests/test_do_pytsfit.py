@@ -27,7 +27,9 @@ def _base_cfg():
                       'figformat': 'jpg'},
         'dict_output': {'tsfig': False, 'param': False, 'obsmod': False,
                         'eqpostts': False, 'velfile': '', 'eqoffset': '',
-                        'break': '', 'eqpostdisp': '', 'eqpost_tspan': [2015, 2023]},
+                        'break': '', 'eqpostdisp': '',
+                        'eqpostdsp_tspan': [2015, 2023],
+                        'eqpostts_tspan': [2015, 2023]},
         'dict_fit': {'sigma_scale': 'nrms', 'min_rsig': 30, 'min_sigscale': 10,
                      'outlier': False, 'nsigma': 4.0, 'outlier_scale': 'mad',
                      'max_iter': 10, 'restore_factor': 0.9, 'max_sigma': 0.0},
@@ -45,7 +47,8 @@ def _parse(argv):
 def test_parser_defaults_are_none():
     args = _parse(['--cfgfile', 'x.yaml'])
     for key, _ in (do_pytsfit._BOOL_KEYS + do_pytsfit._STR_KEYS
-                   + do_pytsfit._LIST_KEYS + do_pytsfit._FLOAT_KEYS
+                   + do_pytsfit._MULTI_STR_KEYS + do_pytsfit._LIST_KEYS
+                   + do_pytsfit._MULTI_LIST_KEYS + do_pytsfit._FLOAT_KEYS
                    + do_pytsfit._INT_KEYS):
         assert getattr(args, key) is None, key
     assert args.sitelist is None
@@ -64,9 +67,16 @@ def test_parser_rejects_invalid_bool(tmp_path):
 
 def test_parser_parses_list_flags_as_float_pairs():
     args = _parse(['--cfgfile', 'x.yaml', '--timespan', '2000', '2021',
-                   '--eqpost-tspan', '2015.5', '2022.5'])
+                   '--eqpostdsp-tspan', '2015.5', '2022.5',
+                   '--eqpostts-tspan', '2015.5', '2022.5'])
     assert args.timespan == [2000.0, 2021.0]
-    assert args.eqpost_tspan == [2015.5, 2022.5]
+    assert args.eqpostdsp_tspan == [2015.5, 2022.5]
+    assert args.eqpostts_tspan == [2015.5, 2022.5]
+
+
+def test_parser_keeps_legacy_eqpost_tspan_alias():
+    args = _parse(['--cfgfile', 'x.yaml', '--eqpost-tspan', '2015.5', '2022.5'])
+    assert args.eqpostdsp_tspan == [2015.5, 2022.5]
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +94,8 @@ def test_no_cli_options_leaves_config_untouched():
     assert cfg['dict_input']['prior_velfile'] == ''
     assert cfg['dict_output']['tsfig'] is False
     assert cfg['dict_output']['velfile'] == ''
-    assert cfg['dict_output']['eqpost_tspan'] == [2015, 2023]
+    assert cfg['dict_output']['eqpostdsp_tspan'] == [2015, 2023]
+    assert cfg['dict_output']['eqpostts_tspan'] == [2015, 2023]
 
 
 def test_cli_overrides_bool_values():
@@ -126,11 +137,40 @@ def test_cli_overrides_prior_files():
 def test_cli_overrides_output_paths_and_tspan():
     cfg = _base_cfg()
     args = _parse(['--cfgfile', 'x.yaml', '--velfile', 'velo.gmtvec',
-                   '--break', 'break.out', '--eqpost-tspan', '2016', '2021'])
+                   '--break', 'break.out',
+                   '--eqpostdsp-tspan', '2016', '2021',
+                   '--eqpostts-tspan', '2016', '2022'])
     do_pytsfit.apply_cli_overrides(args, cfg)
     assert cfg['dict_output']['velfile'] == 'velo.gmtvec'
     assert cfg['dict_output']['break'] == 'break.out'
-    assert cfg['dict_output']['eqpost_tspan'] == [2016.0, 2021.0]
+    assert cfg['dict_output']['eqpostdsp_tspan'] == [2016.0, 2021.0]
+    assert cfg['dict_output']['eqpostts_tspan'] == [2016.0, 2022.0]
+
+
+def test_cli_overrides_multiple_postseismic_outputs():
+    cfg = _base_cfg()
+    args = _parse(['--cfgfile', 'x.yaml',
+                   '--eqpostdisp', 'post1.gmtvec', 'post2.gmtvec',
+                   '--eqpostdsp-tspan', '2016', '2021', '2021', '2026'])
+    do_pytsfit.apply_cli_overrides(args, cfg)
+    assert cfg['dict_output']['eqpostdisp'] == ['post1.gmtvec', 'post2.gmtvec']
+    assert cfg['dict_output']['eqpostdsp_tspan'] == [[2016.0, 2021.0],
+                                                     [2021.0, 2026.0]]
+
+
+def test_cli_legacy_eqpost_tspan_alias_overrides_displacement():
+    cfg = _base_cfg()
+    args = _parse(['--cfgfile', 'x.yaml', '--eqpost-tspan', '2016', '2021'])
+    do_pytsfit.apply_cli_overrides(args, cfg)
+    assert cfg['dict_output']['eqpostdsp_tspan'] == [2016.0, 2021.0]
+
+
+def test_cli_rejects_odd_number_of_tspan_values():
+    cfg = _base_cfg()
+    args = _parse(['--cfgfile', 'x.yaml',
+                   '--eqpostdsp-tspan', '2016', '2021', '2026'])
+    with pytest.raises(SystemExit):
+        do_pytsfit.apply_cli_overrides(args, cfg)
 
 
 def test_partial_override_touches_only_given_options():
