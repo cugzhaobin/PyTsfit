@@ -274,11 +274,15 @@ class tsfitting:
                     i = i+1
                     j = j+1
             if item == 'EQDECAY':
-                lb[i+1]    = self.ieqpostlist[k].mintau
-                ub[i+1]    = self.ieqpostlist[k].maxtau
+                # One EQDECAY flag consumes one eqPost entry. Advance k so each
+                # event gets its own tau bounds instead of reusing entry 0 for
+                # every postseismic term. Cast to float because eqPost stores
+                # the limits as strings read from the eq file.
+                lb[i+1]    = float(self.ieqpostlist[k].mintau)
+                ub[i+1]    = float(self.ieqpostlist[k].maxtau)
                 pinit[i+1] = lb[i+1]
                 i = i+2
-                j = k+1
+                k = k+1
             if item == 'BREAK':
                 if self.correct.correct_offset:
                     for m in range(brkid, len(self.ibrklist)):

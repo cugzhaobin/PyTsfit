@@ -529,12 +529,14 @@ def output_break(nrun, erun, urun, fid=None):
     Ouput non-earthquake breaks.
 
     Written by Zhao Bin, Feb. 21, 2019.
+    Fix bug when no BREAK in flag2 (sites without break terms).
 
     Input:
         nrun   = an instance of class tsfitting for north component
         erun   = an instance of class tsfitting for east  component
         urun   = an instance of class tsfitting for up    component
     '''
+    if 'BREAK' not in nrun.flag2: return
     idx = nrun.flag2.tolist().index('BREAK')
     if fid is not None:
         for i in range(len(nrun.ibrklist)):
